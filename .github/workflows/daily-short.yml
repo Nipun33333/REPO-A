@@ -40,7 +40,7 @@ permissions:
 # Serialize production runs so scheduled/manual jobs cannot race on
 # YouTube quota, used_topics.txt, used_media.json, or git push.
 concurrency:
-  group: daily-youtube-pipeline
+  group: daily-youtube-pipeline-${{ github.event.schedule || github.run_id }}
   cancel-in-progress: false
 
 jobs:
