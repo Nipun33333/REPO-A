@@ -2600,12 +2600,13 @@ def _fetch_pexels_images(
 # Pipeline entry point
 # ============================================================
 
-def _fill_empty_sections_from_pool(media_map: dict, sections: list) -> list:
+def _fill_empty_sections_from_pool(
+    media_map: dict, sections: list, media_source_map: dict | None = None
+) -> list:
     """
-    Last-resort fallback (tier 5): if a section still has ZERO media
-    after all four search tiers, reuse one or more media files already
-    downloaded for a DIFFERENT, non-empty section of the SAME video,
-    rather than leaving the section with nothing.
+    Last-resort fallback (tier 5): an empty section may borrow an image
+    from another section. Video clips are never eligible for cross-section
+    reuse.
 
     This is exactly the requirement: "If Section 1 is empty but Sections
     2/3 have media, use available media from Sections 2/3 for Section
@@ -2627,14 +2628,15 @@ def _fill_empty_sections_from_pool(media_map: dict, sections: list) -> list:
     """
     filled_from_pool = []
 
-    # Build the shared pool from every section that DOES have media,
-    # in section order, so a later section always has something to
-    # borrow from an earlier one and vice versa.
+    # Only images may be borrowed. A video clip belongs to its original
+    # section for the full generated video.
     pool = []
     for section in sections:
         sid = section.get("id")
-        for path in media_map.get(sid, []) or []:
-            if path and os.path.exists(path):
+        sources = (media_source_map or {}).get(sid, []) or []
+        for index, path in enumerate(media_map.get(sid, []) or []):
+            if (index < len(sources) and sources[index] == "image"
+                    and path and os.path.exists(path)):
                 pool.append(path)
 
     if not pool:
@@ -2648,24 +2650,62 @@ def _fill_empty_sections_from_pool(media_map: dict, sections: list) -> list:
         if media_map.get(sid):
             continue
 
-        # Borrow one asset from the shared pool, cycling through it if
-        # there are more empty sections than pool items.
+        # Images retain their pre-existing fallback behavior.
         borrowed = pool[pool_index % len(pool)]
         pool_index += 1
 
         media_map[sid] = [borrowed]
+        if media_source_map is not None:
+            media_source_map[sid] = ["image"]
         filled_from_pool.append(sid)
 
         print(
             f"      ⚠ Section {sid} had NO media of its own after all "
-            f"search tiers — reusing '{os.path.basename(borrowed)}' from "
-            f"another section of this same video so the section is never "
-            f"left blank/black. This asset was validated against the "
-            f"OVERALL VIDEO TOPIC for its original section, not against "
-            f"this section's exact narration."
+            f"search tiers — reusing image '{os.path.basename(borrowed)}' "
+            f"from another section. Video clips are never reused."
         )
 
     return filled_from_pool
+
+
+def _validate_no_repeated_video_assets(
+    media_map: dict, media_source_map: dict
+) -> list:
+    """Remove repeated video paths and byte-identical video assignments.
+
+    Canonical source IDs and perceptual fingerprints are gated by the
+    shared current-run sets in the candidate fetchers. This final pass is
+    a cheap safety net for unexpected media-map construction paths.
+    """
+    seen_paths = set()
+    seen_hashes = set()
+    rejected = []
+    for sid, paths in media_map.items():
+        sources = list(media_source_map.get(sid, []) or [])
+        kept_paths, kept_sources = [], []
+        for index, path in enumerate(paths or []):
+            source = sources[index] if index < len(sources) else "video"
+            if source != "video":
+                kept_paths.append(path)
+                kept_sources.append(source)
+                continue
+            normalized = os.path.normcase(os.path.abspath(path))
+            digest = _sha256_file(path) if path and os.path.isfile(path) else None
+            if normalized in seen_paths or (digest and digest in seen_hashes):
+                print(
+                    f"      ⏭ Duplicate video rejected: section {sid}, "
+                    f"asset {os.path.basename(path)} (already assigned)"
+                )
+                rejected.append(sid)
+                continue
+            seen_paths.add(normalized)
+            if digest:
+                seen_hashes.add(digest)
+            kept_paths.append(path)
+            kept_sources.append(source)
+        media_map[sid] = kept_paths
+        media_source_map[sid] = kept_sources
+    return rejected
 
 
 def download_videos(script: dict, output_dir: str) -> dict:
@@ -2978,13 +3018,15 @@ def download_videos(script: dict, output_dir: str) -> dict:
             f"leaving them blank…"
         )
 
-        filled = _fill_empty_sections_from_pool(media_map, sections)
+        filled = _fill_empty_sections_from_pool(media_map, sections, media_source_map)
 
         if filled:
             print(
                 f"   ✓ Filled {len(filled)} section(s) from the cross-section "
                 f"media pool: {filled}"
             )
+
+    _validate_no_repeated_video_assets(media_map, media_source_map)
 
     empty_sections = [sid for sid, v in media_map.items() if not v]
     if empty_sections:
