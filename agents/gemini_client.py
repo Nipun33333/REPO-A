@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 import config
+from agents.safe_logging import SanitizedServiceError, safe_error_summary
 
 
 _ALL_MODELS = []
@@ -112,12 +113,14 @@ def build_chain(starting_model: str | None = None) -> list[str]:
     return ordered
 
 
-def _generate_once(model: str, contents: Any, timeout_seconds: float | None = None) -> str:
+def _generate_once(model: str, contents: Any, timeout_seconds: float | None = None, *, max_output_tokens: int | None = None) -> str:
+    optional_limits = {"max_output_tokens": max_output_tokens} if max_output_tokens is not None else {}
     response = _get_client().models.generate_content(
         model=model,
         contents=contents,
         config=types.GenerateContentConfig(
             temperature=0.7,
+            **optional_limits,
             http_options=types.HttpOptions(
                 timeout=int(float(timeout_seconds if timeout_seconds is not None else getattr(config, "GEMINI_REQUEST_TIMEOUT_SECONDS", 120)) * 1000)
             ),
@@ -191,11 +194,11 @@ def _generate_with_contents(
                 except Exception as exc:
                     last_error = exc
                     if _is_auth_error(exc):
-                        raise
+                        raise SanitizedServiceError.from_exception(exc) from None
 
-                    summary = str(exc).replace("\n", " ")[:240]
+                    summary = safe_error_summary(exc)
                     if not _is_model_failover_error(exc):
-                        raise
+                        raise SanitizedServiceError.from_exception(exc) from None
 
                     _model_status.setdefault(model, {})["healthy"] = False
                     _model_status[model]["checked"] = True
@@ -219,8 +222,8 @@ def _generate_with_contents(
     raise RuntimeError(
         "All configured Gemini models failed for this request after "
         f"{task_retries + 1} whole-task round(s). Last error: "
-        f"{str(last_error)[:300] if last_error else 'unknown'}"
-    ) from last_error
+        f"{safe_error_summary(last_error) if last_error else 'unknown'}"
+    ) from None
 
 
 def generate(
@@ -236,6 +239,15 @@ def generate(
         timeout_seconds=timeout_seconds,
         max_models=max_models,
     )
+
+
+def generate_optional(prompt: str, *, timeout_seconds: float = 20) -> str:
+    """One bounded attempt for optional work; no retries or router failure state.
+
+    Reuse the active model and client, without the production recovery loop or
+    exception logging (provider errors can contain request credentials).
+    """
+    return _generate_once(get_active_model(), prompt, timeout_seconds=timeout_seconds, max_output_tokens=3072)
 
 
 def generate_vision(prompt: str, image_bytes_list: list, mime_type: str = "image/jpeg", starting_model: str | None = None) -> str:
