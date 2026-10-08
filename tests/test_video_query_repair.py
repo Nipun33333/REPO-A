@@ -52,7 +52,7 @@ def script(research):
 
 
 def test_repair_halo_section_2_drift_without_regeneration(research, script):
-    script["sections"][1]["video_query_3"] = "industry leadership changes footage"
+    script["sections"][1]["video_query_3"] = "penguins swimming across Antarctic waters"
     with pytest.raises(ValueError, match="Section 2 video_query_3 drifted"):
         validate_script_topic_lock(script, research)
     narration_before = [s["narration"] for s in script["sections"]]
@@ -84,7 +84,7 @@ def test_does_not_hide_unrelated_narration(research, script):
 
 
 def test_scriptwriter_repairs_one_bad_query_in_single_generation(monkeypatch, research, script):
-    script["sections"][1]["video_query_3"] = "leadership meeting documentary scene"
+    script["sections"][1]["video_query_3"] = "penguins swimming across Antarctic waters"
     calls = []
     def generate_once(prompt):
         calls.append(prompt)
