@@ -5,7 +5,7 @@ import json
 import re
 
 from agents.gemini_client import generate
-from agents.topic_validation import validate_script_topic_lock
+from agents.topic_validation import repair_script_video_queries, validate_script_topic_lock
 
 
 def _clean_json(raw: str) -> dict:
@@ -148,6 +148,11 @@ def write_script(research: dict, video_type: str = "normal") -> dict:
         )
         script = _clean_json(generate(prompt))
         script = _normalize_script_fields(script, research, video_type)
+        # Repair individual missing/off-topic media queries once without another
+        # Gemini request. Other script integrity checks remain strict.
+        repaired = repair_script_video_queries(script, research)
+        if repaired:
+            print("   ↪ Repaired video queries: " + ", ".join(repaired))
         try:
             validate_script_topic_lock(script, research)
             return script
