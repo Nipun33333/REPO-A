@@ -112,6 +112,59 @@ def validate_research_topic_lock(research: dict) -> None:
     # remain strictly anchored to the trusted research context.
 
 
+
+def repair_script_video_queries(script: dict, research: dict) -> list[str]:
+    """Repair only missing or unanchored video-search queries before validation.
+
+    Gemini can write a legitimate subject-specific narration but use a visual
+    search phrase that omits the literal subject. Re-generating the entire
+    script often repeats that mistake. Keep the original strict validator:
+    create a deterministic subject-anchored replacement only for the offending
+    media query, without changing narration, titles, or research.
+
+    Returns the fields changed, for pipeline diagnostics.
+    """
+    source = str(research.get("source_trend") or research.get("topic") or "").strip()
+    if not topic_terms(source):
+        # A missing/generic research subject is a genuine failure; do not
+        # manufacture a topic or silently bypass downstream validation.
+        return []
+
+    anchors = _script_anchor_terms(script, research)
+    sections = script.get("sections") or []
+    if not isinstance(sections, list):
+        return []
+
+    visual_fallbacks = {
+        "video_query": "recent news footage",
+        "video_query_2": "official video coverage",
+        "video_query_3": "background context footage",
+        "video_query_4": "related interviews and event footage",
+    }
+    repaired = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        sid = section.get("id", "?")
+        narration_terms = topic_terms(str(section.get("narration") or ""))
+        for key, fallback in visual_fallbacks.items():
+            raw_query = section.get(key)
+            query = raw_query.strip() if isinstance(raw_query, str) else ""
+            if query and _matches_terms(anchors, query):
+                continue
+
+            # If the phrase clearly describes this section's narration,
+            # retain its useful scene details but explicitly anchor it to
+            # the selected source. Otherwise discard off-topic filler.
+            if query and len(topic_terms(query) & narration_terms) >= 2:
+                section[key] = f"{source} {query}"
+            else:
+                section[key] = f"{source} {fallback}"
+            repaired.append(f"Section {sid} {key}")
+
+    return repaired
+
+
 def validate_script_topic_lock(script: dict, research: dict | None = None) -> None:
     research = research or {}
     source = str(
