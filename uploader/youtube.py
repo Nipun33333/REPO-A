@@ -133,6 +133,7 @@ def _load_font(size):
         r"C:\Windows\Fonts\arialbd.ttf",
         r"C:\Windows\Fonts\segoeuib.ttf",
         r"C:\Windows\Fonts\calibrib.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ]
 
     for font_path in candidates:
@@ -143,6 +144,18 @@ def _load_font(size):
 
 
 def _create_thumbnail(script: dict) -> str:
+    """Best effort: media/font failures must never turn a successful upload into failure."""
+    try:
+        return _render_thumbnail(script)
+    except Exception:
+        try:
+            return _render_thumbnail(script, use_media=False)
+        except Exception:
+            print("   Thumbnail unavailable; continuing without custom thumbnail.")
+            return ""
+
+
+def _render_thumbnail(script: dict, use_media=True) -> str:
     """
     Create a vertical 9:16 thumbnail using a downloaded Pexels image
     and the video's title.
@@ -150,9 +163,11 @@ def _create_thumbnail(script: dict) -> str:
 
     output_path = Path(config.OUTPUT_DIR) / "thumbnail.jpg"
 
-    source = _find_source_image()
+    source = _find_source_image() if use_media else None
 
     width, height = 1080, 1920
+    if script.get("video_type") == "long" and (script.get("optimized_metadata") or script.get("thumbnail_text")):
+        width, height = 1280, 720
 
     # -----------------------------------------------------
     # Background image
@@ -232,7 +247,7 @@ def _create_thumbnail(script: dict) -> str:
     # Title
     # -----------------------------------------------------
 
-    title = script.get(
+    title = script.get("thumbnail_text") or script.get(
         "title",
         "Amazing Fact",
     )
@@ -267,6 +282,12 @@ def _create_thumbnail(script: dict) -> str:
         lines.append(current)
 
     lines = lines[:5]
+
+    # Fit even a single long word; retain existing wrap/background/contrast.
+    for size in range(92, 19, -4):
+        font = _load_font(size)
+        if all(draw.textbbox((0, 0), line, font=font)[2] <= width - 120 for line in lines):
+            break
 
     # -----------------------------------------------------
     # Center text
@@ -384,19 +405,14 @@ def _set_thumbnail(video_id, thumbnail_path, access_token):
             f"(HTTP {response.status_code})"
         )
 
-        try:
-            print(f"   → {response.json()}")
-        except Exception:
-            pass
-
-        print("   → The thumbnail file was still created.")
+        print("   → Custom thumbnails may be unavailable for this account or Shorts surface; the local file remains available.")
 
         return False
 
-    except Exception as e:
+    except Exception:
 
         print(
-            f"   ⚠ Thumbnail upload failed: {e}"
+            "   ⚠ Thumbnail upload failed; the video remains uploaded."
         )
 
         print(
@@ -681,6 +697,10 @@ def upload_to_youtube(
         )
     )
 
+    if script.get("optimized_metadata") is True:
+        from agents.content_optimization.seo import upload_description
+        description = upload_description(script)
+
     body = {
         "snippet": {
             "title": script["title"],
@@ -766,11 +786,8 @@ def upload_to_youtube(
         "   → Setting YouTube thumbnail…"
     )
 
-    _set_thumbnail(
-        video_id,
-        thumbnail_path,
-        access_token,
-    )
+    if thumbnail_path:
+        _set_thumbnail(video_id, thumbnail_path, access_token)
 
     # -----------------------------------------------------
     # Return URL

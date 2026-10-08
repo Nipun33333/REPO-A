@@ -87,23 +87,33 @@ python pipeline.py
 
 ## 🏗️ How It Works
 
-The pipeline runs 6 sequential phases:
+The CLI pipeline automatically discovers, validates, generates and publishes:
 
 ```
-python pipeline.py  ──►  Research  ──►  Script  ──►  Narration
-                                                          │
-              YouTube ◄── Upload ◄── Review ◄── Video ◄──┘
+US trends → Research → Valid script → Optional optimization → Footage
+                                                              ↓
+YouTube ← Automatic OAuth upload ← Thumbnail/video render ← Narration
 ```
 
 | Phase | Agent | What it does |
 |---|---|---|
-| 1 · Research | `agents/researcher.py` | Gemini brainstorms trending topics for your niche and outputs a structured brief |
-| 2 · Script | `agents/scriptwriter.py` | Expands the brief into a full narrated script with image queries per section |
+| 1 · Research | `agents/researcher.py` | Explains the selected real US trend, with no fixed niche |
+| 2 · Script | `agents/scriptwriter.py` | Three-section Shorts or nine-section long scripts, four subject-specific video queries per section |
+| Optional optimization | `agents/content_optimization/` | Reviewed hooks, titles, thumbnail text, SEO, pacing checks and quality report; disabled by default |
 | 3 · Narration | `video/narrator.py` | Edge-TTS converts the script to a cinematic MP3 voiceover |
-| 4 · Images | `video/stock.py` | Downloads high-res stock photos from Pexels, topic-aware per section |
+| 4 · Footage | `video/stock.py` | Discovers relevant footage with subject checks and duplicate protection |
 | 5 · Video | `video/creator.py` | Renders animated slides with Ken Burns, crossfades, captions, and music |
-| 6 · Review | `review/app.py` | Spins up a local dashboard — you watch and approve before anything is published |
-| 7 · Upload | `uploader/youtube.py` | Publishes to YouTube with full SEO metadata on your approval |
+| 6 · Upload | `uploader/youtube.py` | Automatically publishes through the existing resumable OAuth uploader; thumbnail failures are non-blocking |
+
+The optional review UI remains available separately; scheduled CLI runs do not wait for human review.
+
+### Optional AI content optimization
+
+Set `YT_OPTIMIZATION_ENABLED=1` to enable reviewed hook/title candidates, complementary
+thumbnail text, SEO normalization and `output/content_quality_report.json`. Defaults
+remain off; invalid proposals fall back to previously valid content. No OAuth changes
+are needed. See the [optimization guide](docs/CONTENT_OPTIMIZATION.md) for flags,
+architecture, offline retention CSV analysis, limitations and safe rollout.
 
 ---
 
@@ -245,7 +255,7 @@ On a mid-range machine (i7 + 16GB RAM):
 <details>
 <summary><b>Can I use this without the YouTube upload?</b></summary>
 
-Yes. The review step lets you click "Reject" to skip the upload — the rendered MP4 will still be saved in `output/`. You can also comment out the upload step in `pipeline.py` entirely.
+Yes. Set `SKIP_YOUTUBE_UPLOAD=1` before running the CLI. This still makes external generation/media requests and updates topic/media history. See the [safe testing instructions](docs/CONTENT_OPTIMIZATION.md#verification-and-safe-rollout).
 
 </details>
 
@@ -269,7 +279,7 @@ Your system is missing the fonts the renderer looks for. Install DejaVu fonts:
 <details>
 <summary><b>YouTube upload fails with "access denied"</b></summary>
 
-Delete `youtube_token.pickle` and re-run. This forces a fresh OAuth flow. Make sure your Google account is added as a **Test User** in Google Cloud Console → OAuth consent screen.
+Keep existing credentials intact and consult [OAuth recovery](OAUTH_RECOVERY.md). Diagnose the preflight failure before deciding whether reauthorization is actually required.
 
 </details>
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import config
 
 from agents.gemini_client import generate
 from agents.topic_validation import repair_script_video_queries, validate_script_topic_lock
@@ -26,6 +27,16 @@ def _write_script_prompt(research: dict, video_type: str, previous_error: str = 
         else "Sections: 1 hook, 2 setup, 3 explanation, 4 re-hook, 5 explanation, 6 re-hook, 7 explanation, 8 takeaway, 9 CTA."
     )
     retry_rule = ""
+    retention_rule = ""
+    if getattr(config, "YT_OPTIMIZATION_ENABLED", False):
+        retention_rule = """
+RETENTION:
+Confirm the canonical subject immediately. Open a specific question whose answer
+the body actually delivers. No channel introduction or early subscribe pitch.
+Use natural spoken transitions, one clear idea per beat, and avoid repeated
+explanations. Deliver the promised payoff explicitly before one brief CTA.
+Curiosity must never depend on deceptive claims or invented stakes.
+"""
     if previous_error:
         retry_rule = f"""
 PREVIOUS VALIDATION ERROR:
@@ -74,7 +85,7 @@ NON-NEGOTIABLE:
 
 TIMING:
 {duration_rule}
-{section_rule}
+{section_rule}{retention_rule}
 {retry_rule}
 
 VISUAL RULES:

@@ -2,6 +2,11 @@
 
 Complete step-by-step instructions to run the dynamic current-trend explanation pipeline.
 
+For the optional content upgrade, see [Content optimization](docs/CONTENT_OPTIMIZATION.md).
+It is disabled by default and reuses existing credentials. Existing installations
+do not need to repeat OAuth setup. For a local upload-disabled validation run, use
+`SKIP_YOUTUBE_UPLOAD=1`; external service calls still require authorization.
+
 > **Time required:** ~10 minutes
 
 ---
@@ -193,7 +198,7 @@ The repo includes a few dark cinematic tracks to get you started. Replace or add
 | `No module named 'moviepy'` | Run `pip install -r requirements.txt` again |
 | `ffmpeg not found` | Install ffmpeg and ensure it's on your PATH |
 | `RESOURCE_EXHAUSTED` / 429 | Gemini quota hit — wait until midnight Pacific or switch starting model |
-| `youtube_token.pickle` auth error | Delete the file and re-run to re-authenticate |
+| `youtube_token.pickle` auth error | Preserve the file and diagnose using `OAUTH_RECOVERY.md` before considering reauthorization |
 | Tiny/ugly video text | Install DejaVu fonts: `sudo apt install fonts-dejavu` (Linux) |
 | Flask port already in use | Change `REVIEW_PORT` in `config.py` |
 | `client_secret.json` error | Ensure you replaced the placeholder with your real Google credentials |

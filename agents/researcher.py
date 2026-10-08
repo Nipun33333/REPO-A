@@ -6,6 +6,7 @@ import os
 import re
 
 from agents.gemini_client import generate
+from agents.safe_logging import safe_error_summary, safe_log_text
 from agents.niche import validate_manual_topic
 from agents.us_trends import get_best_us_trending_topic
 
@@ -19,7 +20,7 @@ def load_banned_topics() -> list[str]:
         with open(_BANNED_TOPICS_FILE, encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip() and not line.startswith("#")]
     except Exception as exc:
-        print(f"   ⚠ Could not read banned_topics.txt: {exc}")
+        print(f"   ⚠ Could not read banned_topics.txt: {safe_error_summary(exc)}")
         return []
 
 
@@ -228,7 +229,7 @@ def research_topic(channel_description: str, topic_override: str = "", focus_ang
         print("   → No fixed topic keyword list or niche gate is used.")
         trend = get_best_us_trending_topic(channel_description)
     data = _research_selected_candidate(trend, channel_description, banned)
-    print(f"   ✅ Final explanation topic: {data['topic']}")
-    print(f"   🎯 Title: {data['video_title']}")
-    print(f"   🧩 Domain: {data['content_domain']} | Type: {data['content_type']}")
+    print(f"   ✅ Final explanation topic: {safe_log_text(data['topic'])}")
+    print(f"   🎯 Title: {safe_log_text(data['video_title'])}")
+    print(f"   🧩 Domain: {safe_log_text(data['content_domain'])} | Type: {safe_log_text(data['content_type'])}")
     return data

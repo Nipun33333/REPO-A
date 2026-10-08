@@ -30,6 +30,7 @@ import config
 from agents.gemini_client import initialize_model_router, get_active_model
 from agents.researcher import research_topic
 from agents.scriptwriter import write_script
+from agents.content_optimization import optimize_content
 from agents.topic_validation import (
     build_topic_trace,
     validate_research_topic_lock,
@@ -214,6 +215,16 @@ def run():
             video_type=video_type
         )
         validate_script_topic_lock(script, research)
+
+    if config.YT_OPTIMIZATION_ENABLED:
+        with timed_stage("content_optimization"):
+            previous_script = script
+            try:
+                script = optimize_content(script, research, config.OUTPUT_DIR)
+                validate_script_topic_lock(script, research)
+            except Exception:
+                script = previous_script
+                print("   Optional content optimization unavailable; retaining validated script.")
 
     print(f"\n  ✅  {len(script['sections'])} sections written")
 

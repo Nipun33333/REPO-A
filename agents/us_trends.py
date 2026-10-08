@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import config
 from agents.niche import select_semantic_candidate
+from agents.safe_logging import SanitizedServiceError, safe_error_summary, safe_log_text
 
 YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3"
 USED_TOPICS_FILE = os.path.join(config.PROJECT_ROOT, "used_topics.txt")
@@ -63,7 +64,7 @@ def load_used_topics() -> list[str]:
         with open(USED_TOPICS_FILE, encoding="utf-8") as f:
             return [line.strip() for line in f if line.strip() and not line.startswith("#")]
     except Exception as exc:
-        print(f"   ⚠ Could not read used_topics.txt: {exc}")
+        print(f"   ⚠ Could not read used_topics.txt: {safe_error_summary(exc)}")
         return []
 
 
@@ -72,7 +73,7 @@ def save_used_topic(topic: str) -> None:
         with open(USED_TOPICS_FILE, "a", encoding="utf-8") as f:
             f.write((topic or "").strip() + "\n")
     except Exception as exc:
-        print(f"   ⚠ Could not save used topic: {exc}")
+        print(f"   ⚠ Could not save used topic: {safe_error_summary(exc)}")
 
 
 def youtube_request(endpoint: str, params: dict, timeout: float = 8.0) -> dict:
@@ -80,14 +81,18 @@ def youtube_request(endpoint: str, params: dict, timeout: float = 8.0) -> dict:
         raise RuntimeError("YOUTUBE_API_KEY is missing.")
     query = dict(params)
     query["key"] = config.YOUTUBE_API_KEY
-    response = requests.get(
-        f"{YOUTUBE_API_URL}/{endpoint}",
-        params=query,
-        headers={"User-Agent": "YTAGENT-US-Trending/1.0"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = requests.get(
+            f"{YOUTUBE_API_URL}/{endpoint}",
+            params=query,
+            headers={"User-Agent": "YTAGENT-US-Trending/1.0"},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        # Suppress chaining too: HTTPError includes the secret-bearing URL.
+        raise SanitizedServiceError.from_exception(exc) from None
     if not isinstance(data, dict):
         raise RuntimeError("YouTube API returned an invalid payload.")
     return data
@@ -126,6 +131,8 @@ def _fetch_source(source_name: str, base_params: dict) -> tuple[str, list[dict]]
     for _ in range(max(1, config.DISCOVERY_MAX_PAGES)):
         params = dict(base_params)
         params.update({"part": "snippet,statistics", "maxResults": config.DISCOVERY_RESULTS_PER_SOURCE})
+        if getattr(config, "YT_TREND_DIAGNOSTICS_ENABLED", False):
+            params["part"] += ",contentDetails"
         if page_token:
             params["pageToken"] = page_token
         data = youtube_request("videos", params)
@@ -154,6 +161,17 @@ def _fetch_source(source_name: str, base_params: dict) -> tuple[str, list[dict]]
                 "comments": int(stats.get("commentCount", 0) or 0),
                 "source": source_name,
             })
+            if getattr(config, "YT_TREND_DIAGNOSTICS_ENABLED", False):
+                row = collected[-1]
+                row["channel_id"] = snippet.get("channelId", "")
+                row["observed_statistics"] = [name for name, key in (("views", "viewCount"), ("likes", "likeCount"), ("comments", "commentCount")) if key in stats]
+                duration = (item.get("contentDetails") or {}).get("duration", "")
+                match = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration)
+                if match and any(match.groups()):
+                    hours, minutes, seconds = (int(x or 0) for x in match.groups())
+                    duration_seconds = hours * 3600 + minutes * 60 + seconds
+                    # Duration bands are not assertions that a video is a Short.
+                    row["video_type"] = "under_3m" if duration_seconds <= 180 else "3m_to_15m" if duration_seconds <= 900 else "over_15m"
         page_token = data.get("nextPageToken")
         if not page_token:
             break
@@ -187,11 +205,14 @@ def fetch_youtube_candidates() -> list[dict]:
             try:
                 _, rows = future.result()
                 videos.extend(rows)
-                print(f"   → {source}: {len(rows)} recent candidates")
+                print(f"   → {safe_log_text(source)}: {len(rows)} recent candidates")
             except Exception as exc:
-                print(f"   ⚠ {source} discovery failed: {exc}")
+                print(f"   ⚠ {safe_log_text(source)} discovery failed: {safe_error_summary(exc)}")
 
     candidates = _dedupe_and_score(videos)
+    if getattr(config, "YT_TREND_DIAGNOSTICS_ENABLED", False):
+        from agents.content_optimization.trends import save_trend_diagnostics
+        save_trend_diagnostics(candidates, config.OUTPUT_DIR, getattr(config, "YT_TREND_HISTORY_PATH", ""))
     print(f"   → Found {len(candidates)} unique recent YouTube candidates before semantic filtering")
     return candidates
 
@@ -242,14 +263,16 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
             if "No usable current US trend candidate" in str(exc):
                 print(f"   ↪ No explainable current trend in batch {batch_index + 1}; checking the next batch...")
                 continue
-            raise
+            raise SanitizedServiceError.from_exception(exc) from None
+        except Exception as exc:
+            raise SanitizedServiceError.from_exception(exc) from None
 
     if selected is None:
         raise RuntimeError("No usable current US trend candidate after semantic scanning.")
 
-    print(f"   ✅ Selected current US trend: {selected['title']}")
-    print(f"   🎯 Domain: {selected['content_domain']} | Type: {selected['content_type']}")
-    print(f"   🧠 Angle: {selected['content_angle'] or '(Gemini did not provide one)'}")
+    print(f"   ✅ Selected current US trend: {safe_log_text(selected['title'])}")
+    print(f"   🎯 Domain: {safe_log_text(selected['content_domain'])} | Type: {safe_log_text(selected['content_type'])}")
+    print(f"   🧠 Angle: {safe_log_text(selected['content_angle'] or '(Gemini did not provide one)')}")
 
     return {
         "candidate_id": selected["video_id"],

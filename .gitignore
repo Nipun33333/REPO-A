@@ -50,3 +50,6 @@ desktop.ini
 
 # ── Logs ─────────────────────────────────
 *.log
+
+# Local reference only; never vendor the nested repository.
+.yt-skill-reference/

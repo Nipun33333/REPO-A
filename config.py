@@ -11,6 +11,13 @@ for _stream in (sys.stdout, sys.stderr):
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+# Optional content improvements. Production behavior stays unchanged by default.
+YT_OPTIMIZATION_ENABLED = os.getenv("YT_OPTIMIZATION_ENABLED", "0").lower() in {"1", "true", "yes"}
+# Parsed/clamped by the optional module so a bad setting cannot stop production.
+YT_OPTIMIZATION_TIMEOUT_SECONDS = os.getenv("YT_OPTIMIZATION_TIMEOUT_SECONDS", "20")
+YT_TREND_DIAGNOSTICS_ENABLED = os.getenv("YT_TREND_DIAGNOSTICS_ENABLED", "0").lower() in {"1", "true", "yes"}
+YT_TREND_HISTORY_PATH = os.getenv("YT_TREND_HISTORY_PATH", "").strip()
+
 # ---------------------------------------------------------------------------
 # APIs
 # ---------------------------------------------------------------------------
