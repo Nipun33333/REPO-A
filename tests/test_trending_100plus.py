@@ -189,7 +189,7 @@ def test_fetch_source_parallel_result_shape(monkeypatch):
     def fake_request(endpoint, params, timeout=8.0):
         return {"items": [{
             "id": "video-1",
-            "snippet": {"title": "Current AI chip trend", "description": "desc", "publishedAt": "2026-09-28T08:00:00Z", "channelTitle": "channel", "categoryId": "28"},
+            "snippet": {"title": "Current AI chip trend", "description": "desc", "publishedAt": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"), "channelTitle": "channel", "categoryId": "28"},
             "statistics": {"viewCount": "1000", "likeCount": "50", "commentCount": "5"},
         }], "nextPageToken": None}
     monkeypatch.setattr(us_trends, "youtube_request", fake_request)
