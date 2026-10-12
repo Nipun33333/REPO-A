@@ -1,10 +1,11 @@
+
 name: Daily YouTube Pipeline
 
 on:
   workflow_dispatch:
     inputs:
       video_type:
-        description: "Manual run mode. Use auto for the normal Asia/Kolkata weekday/weekend schedule."
+        description: "Manual run mode. Use auto for normal schedule."
         required: false
         default: "auto"
         type: choice
@@ -14,9 +15,7 @@ on:
           - long
 
   schedule:
-    # Monday-Friday evenings: 3 Shorts.
-    # The third slot is 00:30 IST on the following calendar day,
-    # so the five weekday evening runs are represented by Tue-Sat 00:30.
+    # Monday-Friday: 3 Shorts
     - cron: "0 20 * * 1-5"
       timezone: "Asia/Kolkata"
 
@@ -26,19 +25,17 @@ on:
     - cron: "30 0 * * 2-6"
       timezone: "Asia/Kolkata"
 
-    # Saturday: 1 Long Video at 17:00 IST.
+    # Saturday: 1 Long Video
     - cron: "0 17 * * 6"
       timezone: "Asia/Kolkata"
 
-    # Sunday: 1 Long Video at 17:00 IST.
+    # Sunday: 1 Long Video
     - cron: "0 17 * * 0"
       timezone: "Asia/Kolkata"
 
 permissions:
   contents: write
 
-# Serialize production runs so scheduled/manual jobs cannot race on
-# YouTube quota, used_topics.txt, used_media.json, or git push.
 concurrency:
   group: daily-youtube-pipeline-${{ github.event.schedule || github.run_id }}
   cancel-in-progress: false
@@ -69,6 +66,117 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      # ======================================
+      # NEW: EDGE TTS REAL CONNECTION TEST
+      # ======================================
+
+      - name: Test Edge TTS Directly
+        shell: bash
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+          import sys
+          import importlib.metadata
+          import edge_tts
+
+          print("=" * 45)
+          print("EDGE TTS DIAGNOSTIC TEST")
+          print("=" * 45)
+
+          version = importlib.metadata.version("edge-tts")
+          print("Installed Edge TTS version:", version)
+
+          async def test_edge_tts():
+              voice = "en-US-AndrewNeural"
+
+              print("Voice:", voice)
+              print("Testing Microsoft Edge TTS...")
+              print("Generating sample audio...")
+
+              communicator = edge_tts.Communicate(
+                  text="Hello, this is a test of Microsoft Edge Text to Speech.",
+                  voice=voice,
+                  rate="-5%",
+                  pitch="-3Hz",
+              )
+
+              output = "/tmp/edge_tts_test.mp3"
+
+              await asyncio.wait_for(
+                  communicator.save(output),
+                  timeout=60
+              )
+
+              if not os.path.isfile(output):
+                  raise RuntimeError(
+                      "Edge TTS did not create audio file"
+                  )
+
+              size = os.path.getsize(output)
+
+              print("Generated audio size:", size)
+
+              if size < 1000:
+                  raise RuntimeError(
+                      "Edge TTS returned invalid or empty audio"
+                  )
+
+              print("=" * 45)
+              print("EDGE TTS TEST PASSED")
+              print("Real audio generated successfully")
+              print("=" * 45)
+
+          try:
+              asyncio.run(test_edge_tts())
+
+          except Exception as error:
+              print("=" * 45)
+              print("EDGE TTS TEST FAILED")
+              print("=" * 45)
+
+              print(
+                  "Error Type:",
+                  type(error).__name__
+              )
+
+              status = getattr(
+                  error, "status", None
+              )
+
+              if status is not None:
+                  print("HTTP Status:", status)
+
+              if status == 403:
+                  print(
+                      "Microsoft Edge TTS rejected the request."
+                  )
+                  print(
+                      "Possible endpoint or access restriction."
+                  )
+
+              elif isinstance(error, asyncio.TimeoutError):
+                  print(
+                      "Edge TTS connection timed out."
+                  )
+
+              elif isinstance(error, edge_tts.exceptions.NoAudioReceived):
+                  print(
+                      "Edge TTS returned no audio."
+                  )
+
+              else:
+                  print(
+                      "Check TTS connection, voice and library."
+                  )
+
+              sys.exit(1)
+          PY
+
+      # ======================================
+      # EXISTING VIDEO PIPELINE
+      # ======================================
 
       - name: Force compatible MoviePy
         run: |
