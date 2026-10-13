@@ -477,3 +477,39 @@ def test_japanese_source_can_support_anchored_english_research():
     with pytest.raises(ValueError, match="topic drifted"):
         researcher._validate_topic_integrity(
             {"source_trend": source, "topic": "Bitcoin price forecast"}, source, context)
+
+
+def test_research_retries_japanese_output_in_english(monkeypatch):
+    from agents import researcher
+    source = "ホタルの嫁入り 第二話 予告"
+    trend = {"selected_trend": source, "content_domain": "JAPANESE_ANIME",
+             "content_angle": "Hotaru no Yomeiri character explanation"}
+    data = {"source_trend": source, "topic": source, "video_title": source,
+            "content_domain": "JAPANESE_ANIME", "content_type": "EXPLAINER",
+            "key_points": ["Hotaru no Yomeiri characters"], "tags": ["anime"]}
+    answers = iter([data, {**data, "topic": "Hotaru no Yomeiri character explanation",
+                          "video_title": "Hotaru no Yomeiri explained"}])
+    calls = []
+    def generate(prompt):
+        calls.append(prompt)
+        return json.dumps(next(answers))
+    monkeypatch.setattr(researcher, "generate", generate)
+    result = researcher._research_selected_candidate(trend, config.CHANNEL_DESCRIPTION, [])
+    assert result["topic"] == "Hotaru no Yomeiri character explanation"
+    assert result["source_trend"] == source
+    assert len(calls) == 2 and "OUTPUT LANGUAGE: English" in calls[0]
+
+
+def test_japanese_source_query_repair_uses_english_work():
+    research = {"topic": "Hotaru no Yomeiri character explanation",
+                "source_trend": "ホタルの嫁入り 第二話 予告",
+                "content_domain": "JAPANESE_ANIME", "content_type": "EXPLAINER"}
+    script = _short_script(research)
+    script["content_domain"] = "JAPANESE_ANIME"
+    script["sections"][0]["video_query"] = ""
+    topic_validation.repair_script_video_queries(script, research)
+    assert "Hotaru no Yomeiri" in script["sections"][0]["video_query"]
+    topic_validation.validate_script_topic_lock(script, research)
+    script["sections"][0]["narration"] = "ホタルの嫁入り 第二話"
+    with pytest.raises(ValueError, match="English and romanized"):
+        topic_validation.validate_script_topic_lock(script, research)

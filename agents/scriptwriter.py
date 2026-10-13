@@ -48,6 +48,9 @@ Correct that problem in the COMPLETE JSON. Do not change the selected subject.
 Focus on the selected work's story, ending, character/lore, supported hidden details,
 trailer clues or relevant developments. Separate fan theories from confirmed canon.
 Never invent an easter egg, scene, quote or plot twist to make the story more exciting.
+OUTPUT LANGUAGE: Natural conversational English, including narration, captions,
+titles and visual queries. Use official English/romanized work and character names
+for Japanese anime. Preserve the original source_trend only as identity metadata.
 
 SELECTED SUBJECT:
 {research['topic']}

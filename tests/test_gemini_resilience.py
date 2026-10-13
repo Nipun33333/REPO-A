@@ -18,7 +18,7 @@ def load_client(monkeypatch):
     genai.Client = DummyClient
     class DummyConfig:
         def __init__(self, **kwargs):
-            pass
+            self.__dict__.update(kwargs)
     class DummyPart:
         @classmethod
         def from_bytes(cls, data, mime_type):
@@ -27,6 +27,7 @@ def load_client(monkeypatch):
         def from_text(cls, text):
             return text
     genai_types.GenerateContentConfig = DummyConfig
+    genai_types.HttpOptions = DummyConfig
     genai_types.Part = DummyPart
     google.genai = genai
 
@@ -227,3 +228,18 @@ def test_user_interrupt_is_not_retried(monkeypatch):
     monkeypatch.setattr(client, "_generate_once", interrupt)
     with pytest.raises(KeyboardInterrupt):
         client.generate("selection")
+
+
+def test_sdk_retries_do_not_multiply_router_attempts(monkeypatch):
+    client = load_client(monkeypatch)
+    calls = []
+    def generate(**kwargs):
+        calls.append(kwargs)
+        return types.SimpleNamespace(text="valid result")
+    monkeypatch.setattr(client, "_get_client", lambda: types.SimpleNamespace(
+        models=types.SimpleNamespace(generate_content=generate)))
+    assert client._generate_once("model-a", "prompt", timeout_seconds=3.5) == "valid result"
+    assert len(calls) == 1
+    options = calls[0]["config"].http_options
+    assert options.timeout == 3500
+    assert options.retry_options == {"attempts": 1}

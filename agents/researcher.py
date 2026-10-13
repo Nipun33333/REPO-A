@@ -9,6 +9,7 @@ from agents.gemini_client import generate
 from agents.safe_logging import safe_error_summary, safe_log_text
 from agents.niche import validate_manual_topic
 from agents.us_trends import get_best_us_trending_topic
+from agents.topic_validation import validate_research_topic_lock
 
 _BANNED_TOPICS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "banned_topics.txt")
 
@@ -184,6 +185,9 @@ BANNED USER TOPICS:
 {json.dumps(banned)}
 
 Create a concise research plan for ONE explanation video about the selected subject.
+OUTPUT LANGUAGE: English. Even for Japanese sources, write topic, title, description,
+hook, key points and angle in English using the official English/romanized work and
+character names. Only source_trend must retain the exact original source title.
 Keep the underlying work unchanged. Explain its story or ending, character/lore,
 supported hidden details/easter eggs, trailer clues, or relevant current developments.
 Label fan theories and interpretations clearly; never present them as confirmed canon.
@@ -209,13 +213,23 @@ Return ONLY JSON:
   "thumbnail_concept": "thumbnail concept centered on the subject"
 }}
 """
-    data = _validate_research(_clean_json(generate(prompt)))
-    # The domain is owned by the selection gate, not a research rewrite.
-    data["content_domain"] = trend["content_domain"]
-    data["selected_candidate_id"] = trend.get("candidate_id", "")
-    data["trend_score"] = trend.get("trend_score", 0)
-    data["semantic_confidence"] = trend.get("semantic_confidence", 0)
-    return _validate_topic_integrity(data, selected, subject_context=trend)
+    for attempt in range(3):
+        raw = generate(prompt)
+        try:
+            data = _validate_research(_clean_json(raw))
+            # The domain is owned by the selection gate, not a research rewrite.
+            data["content_domain"] = trend["content_domain"]
+            data["selected_candidate_id"] = trend.get("candidate_id", "")
+            data["trend_score"] = trend.get("trend_score", 0)
+            data["semantic_confidence"] = trend.get("semantic_confidence", 0)
+            _validate_topic_integrity(data, selected, subject_context=trend)
+            validate_research_topic_lock(data)
+            return data
+        except (ValueError, TypeError):
+            if attempt == 2:
+                raise
+            print("   ↪ Regenerating research: keep valid JSON, English wording and the selected work.")
+            prompt += "\nCorrect the complete JSON. Use English/romanized work names in topic and keep source_trend exactly as supplied. Retain the selected subject and all required fields.\n"
 
 
 def research_topic(channel_description: str, topic_override: str = "", focus_angle: str = "") -> dict:

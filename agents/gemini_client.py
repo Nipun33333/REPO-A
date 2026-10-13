@@ -137,7 +137,10 @@ def _generate_once(model: str, contents: Any, timeout_seconds: float | None = No
             temperature=0.7,
             **optional_limits,
             http_options=types.HttpOptions(
-                timeout=int(float(timeout_seconds if timeout_seconds is not None else getattr(config, "GEMINI_REQUEST_TIMEOUT_SECONDS", 120)) * 1000)
+                timeout=int(float(timeout_seconds if timeout_seconds is not None else getattr(config, "GEMINI_REQUEST_TIMEOUT_SECONDS", 120)) * 1000),
+                # The router owns retries. SDK retries would multiply each
+                # attempt (and even optional calls) by up to five requests.
+                retry_options={"attempts": 1},
             ),
         ),
     )
