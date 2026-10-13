@@ -36,7 +36,7 @@ _stop_event = threading.Event()   # set() to request pipeline stop
 _state = {
     "running":        False,
     "stop_requested": False,
-    "video_type":     "normal",
+    "video_type":     "shorts",
     "stages": {
         "research":  "pending",   # pending | running | done | error
         "script":    "pending",
@@ -190,7 +190,7 @@ def _ts(secs):
     h, m, s = secs//3600, (secs%3600)//60, secs%60
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
-def _build_description(script, research, video_type: str = "normal"):
+def _build_description(script, research, video_type: str = "shorts"):
     sections = script.get("sections", [])
     is_shorts = video_type == "shorts" or script.get("video_type") == "shorts"
 
@@ -236,7 +236,7 @@ def _build_description(script, research, video_type: str = "normal"):
 #  PIPELINE RUNNER  (runs in background thread)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _run_pipeline(steps: list, topic_override: str = "", video_type: str = "normal", focus_angle: str = ""):
+def _run_pipeline(steps: list, topic_override: str = "", video_type: str = "shorts", focus_angle: str = ""):
     orig_stdout = sys.stdout
     sys.stdout = _Capture(orig_stdout)
     _state["running"] = True
@@ -250,6 +250,8 @@ def _run_pipeline(steps: list, topic_override: str = "", video_type: str = "norm
             raise InterruptedError(f"Stopped by user after {after_stage}")
 
     try:
+        if video_type != "shorts":
+            raise ValueError("Only YouTube Shorts are supported.")
         Path(config.OUTPUT_DIR).mkdir(exist_ok=True)
         Path(config.IMAGES_DIR).mkdir(exist_ok=True)
 
@@ -447,7 +449,9 @@ def run_pipeline():
     steps       = body.get("steps", ["research","script","images","narration","music","video"])
     topic       = body.get("topic", "").strip()
     focus_angle = body.get("focus_angle", "").strip()
-    video_type  = body.get("video_type", "normal")
+    video_type  = body.get("video_type", "shorts")
+    if video_type != "shorts":
+        return jsonify({"ok": False, "error": "Only YouTube Shorts are supported."}), 400
     for s in steps:
         if s in _state["stages"]: _state["stages"][s] = "pending"
     _state["video_type"] = video_type
@@ -479,7 +483,7 @@ def status():
         "error":          _state.get("error"),
         "upload_pct":     _state.get("upload_pct", 0),
         "uploading":      _state.get("uploading", False),
-        "video_type":     _state.get("video_type", "normal"),
+        "video_type":     _state.get("video_type", "shorts"),
     })
 
 
@@ -510,7 +514,7 @@ def get_output():
     r = _state.get("research") or {}
     return jsonify({
         "title":       s.get("title", ""),
-        "description": _state.get("description", _build_description(s, r, _state.get("video_type","normal")) if s and r else ""),
+        "description": _state.get("description", _build_description(s, r, _state.get("video_type","shorts")) if s and r else ""),
         "tags":        s.get("tags", []),
         "sections":    s.get("sections", []),
         "topic":       r.get("topic", ""),

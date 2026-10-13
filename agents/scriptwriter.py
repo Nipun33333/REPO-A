@@ -153,7 +153,9 @@ def _normalize_script_fields(script: dict, research: dict, video_type: str) -> d
     return script
 
 
-def write_script(research: dict, video_type: str = "normal") -> dict:
+def write_script(research: dict, video_type: str = "shorts") -> dict:
+    if video_type != "shorts":
+        raise ValueError("Only YouTube Shorts are supported.")
     last_error = None
     # Three attempts: initial generation + two targeted repairs. The validator
     # is intentionally deterministic so retries are used only for actual model

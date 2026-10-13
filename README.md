@@ -27,7 +27,7 @@
 | 🎙️ **Free Voice** | Microsoft Edge TTS (no API key, no cost, word-level timing) |
 | 🖼️ **Stock Images** | Auto-downloads from Pexels with topic-aware search |
 | 🎞️ **Animated Video** | Ken Burns zoom, smooth crossfades, captions, progress bars |
-| 📱 **Shorts Support** | Generates vertical 9:16 Shorts alongside the main video |
+| 📱 **Shorts Support** | Generates vertical 9:16 Shorts only |
 | 🕵️ **Human Review** | Optional local dashboard to inspect, edit, and upload |
 | 🚀 **Auto Upload** | Publishes to YouTube with SEO tags, description, and thumbnail |
 | 🔄 **Fast Model Fallback** | Preferred Gemini model first; fallback only after a real request fails |
@@ -98,7 +98,7 @@ YouTube ← Automatic OAuth upload ← Thumbnail/video render ← Narration
 | Phase | Agent | What it does |
 |---|---|---|
 | 1 · Research | `agents/researcher.py` | Explains the selected US movie or Japanese/US anime, with supported details and clearly labelled theories |
-| 2 · Script | `agents/scriptwriter.py` | Three-section Shorts or nine-section long scripts, four subject-specific video queries per section |
+| 2 · Script | `agents/scriptwriter.py` | Three-section Shorts scripts, four subject-specific video queries per section |
 | Optional optimization | `agents/content_optimization/` | Reviewed hooks, titles, thumbnail text, SEO, pacing checks and quality report; disabled by default |
 | 3 · Narration | `video/narrator.py` | Edge-TTS converts the script to a cinematic MP3 voiceover |
 | 4 · Footage | `video/stock.py` | Discovers relevant footage with subject checks and duplicate protection |
@@ -290,13 +290,13 @@ Keep existing credentials intact and consult [OAuth recovery](OAUTH_RECOVERY.md)
 
 GitHub Actions uses the `Asia/Kolkata` timezone directly. The production schedule is:
 
-Topic discovery is fully category-agnostic: there is no fixed topic-category allowlist.
+Shorts only, **three times every day, Monday-Sunday**:
 
-- Monday-Friday: **8:00 PM IST → Shorts**
-- Monday-Friday: **10:00 PM IST → Shorts**
-- Tuesday-Saturday at **12:30 AM IST → Shorts** (the third Shorts slot for the previous weekday evening)
-- Saturday: **5:00 PM IST → Long Video**
-- Sunday: **5:00 PM IST → Long Video**
+- **1:00 AM IST → Shorts**
+- **3:00 AM IST → Shorts**
+- **6:00 AM IST → Shorts**
+
+Long-video runs are disabled in the scheduled workflow, manual workflow, CLI and generation UI.
 
 The scheduled time starts the pipeline. The actual YouTube upload can finish later because topic discovery, Gemini generation, TTS, media download, rendering, and OAuth upload take variable time.
 
@@ -304,7 +304,7 @@ The scheduled time starts the pipeline. The actual YouTube upload can finish lat
 ## 🗺️ Roadmap
 
 - [ ] Thumbnail generator (AI-designed cover art)
-- [x] Scheduler (GitHub Actions: 8 PM, 10 PM, and 12:30 AM IST weekday-evening Shorts; 5 PM IST weekend Long videos)
+- [x] Scheduler (GitHub Actions: 1 AM, 3 AM and 6 AM IST Shorts every day)
 - [ ] Multi-channel support
 - [ ] Custom intro/outro clips
 - [ ] Analytics dashboard

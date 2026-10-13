@@ -4,9 +4,7 @@ YouTube AI Agent — Main Pipeline (Free Edition)
 Uses: Gemini · Edge TTS · Pexels · MoviePy · YouTube Data API
 
 Schedule:
-- Monday-Friday: Shorts
-- Saturday: 1 Long Video (5-6 min)
-- Sunday: 1 Long Video (5-6 min)
+- Monday-Sunday: Shorts at 1:00 AM, 3:00 AM and 6:00 AM IST
 
 Run: python -m pipeline
 """
@@ -85,40 +83,6 @@ def _schedule_timezone():
     return ZoneInfo(tz_name)
 
 
-def _legacy_get_video_type(now: datetime | None = None):
-    """
-    Asia/Kolkata Monday-Friday = Shorts.
-    Asia/Kolkata Saturday-Sunday = Long Video.
-
-    PIPELINE_VIDEO_TYPE may be set to "shorts" or "long" for an explicit
-    manual/local override. Scheduled production runs should leave it unset.
-    """
-    override = os.getenv("PIPELINE_VIDEO_TYPE", "").strip().lower()
-    if override:
-        if override not in {"shorts", "long"}:
-            raise ValueError(
-                "PIPELINE_VIDEO_TYPE must be unset, 'shorts', or 'long'."
-            )
-        return override
-
-    tz = _schedule_timezone()
-    if now is None:
-        current = datetime.now(tz)
-    elif now.tzinfo is None:
-        current = now.replace(tzinfo=tz)
-    else:
-        current = now.astimezone(tz)
-
-    weekday = current.weekday()
-
-    # Monday=0 ... Friday=4
-    if weekday <= 4:
-        return "shorts"
-
-    # Saturday=5, Sunday=6
-    return "long"
-
-
 def _clean_output_dir():
     """
     Remove all files/subfolders left over from a PREVIOUS pipeline run
@@ -171,10 +135,7 @@ def run():
 
     video_type = get_video_type()
 
-    if video_type == "shorts":
-        print("\n🎬  YouTube AI Agent Studio  ·  SHORTS Pipeline\n")
-    else:
-        print("\n🎬  YouTube AI Agent Studio  ·  LONG VIDEO Pipeline\n")
+    print("\n🎬  YouTube AI Agent Studio  ·  SHORTS Pipeline\n")
 
     # ── Explicit schedule/timezone runtime logging ──────────────────
     # Always show BOTH clocks plus the resolved decision, so a scheduled
@@ -207,7 +168,7 @@ def run():
     # ── 2. Script ─────────────────────────────────────────────
     banner(
         f"2 / 6  ·  Writing "
-        f"{'Shorts' if video_type == 'shorts' else 'Long Video'} script  [Gemini]"
+        "Shorts script  [Gemini]"
     )
 
     with timed_stage("script_generation"):
@@ -245,10 +206,7 @@ def run():
 
     print(f"\n  📝 Total words: {total_words}")
 
-    if video_type == "shorts":
-        print("  🎯 Target duration: 30-35 seconds")
-    else:
-        print("  🎯 Target duration: 5-6 minutes")
+    print("  🎯 Target duration: 30-35 seconds")
 
     with open(f"{config.OUTPUT_DIR}/script.json", "w") as f:
         json.dump(script, f, indent=2)
@@ -297,7 +255,7 @@ def run():
     # ── 5. Video ──────────────────────────────────────────────
     banner(
         f"5 / 6  ·  Building "
-        f"{'Short' if video_type == 'shorts' else 'Long'} video  "
+        "Short video  "
         "[FFmpeg]"
     )
 
