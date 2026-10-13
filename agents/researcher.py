@@ -98,14 +98,18 @@ def _subject_anchor_terms(source: str) -> set[str]:
 
 
 def _topic_matches(source: str, text: str, *, anchors: set[str] | None = None) -> bool:
+    if source.strip() and source.strip() == text.strip():
+        return True
     a = _normalize(source)
     b = _normalize(text)
+    # Japanese source titles may have no Latin terms. The selector's English
+    # work name/angle still anchors the English research to that same subject.
+    if anchors and (anchors & b):
+        return True
     if not a or not b:
         return False
     common = a & b
     if len(common) >= min(2, len(a)):
-        return True
-    if anchors and (anchors & b):
         return True
     return False
 

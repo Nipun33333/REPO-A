@@ -22,7 +22,8 @@ BANNED_KEYWORDS = [
 
 
 def normalize(text: str) -> str:
-    text = re.sub(r"[^a-z0-9 ]+", " ", (text or "").lower())
+    # Keep Japanese titles usable for duplicate detection as well as English.
+    text = re.sub(r"[^\w ]+|_", " ", (text or "").lower())
     return re.sub(r"\s+", " ", text).strip()
 
 

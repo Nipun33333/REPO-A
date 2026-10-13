@@ -459,3 +459,21 @@ def test_empty_search_does_not_request_unfiltered_videos(monkeypatch):
     monkeypatch.setattr(us_trends, "youtube_request", request)
     assert us_trends._fetch_source("US_anime", {"q": "anime"})[1] == []
     assert calls == ["search"]
+
+
+def test_japanese_titles_are_not_repeated(monkeypatch):
+    title = "ホタルの嫁入り 第二話 予告"
+    monkeypatch.setattr(us_trends, "load_used_topics", lambda: [title])
+    assert us_trends.filter_candidates([_candidate(title)]) == []
+    assert not us_trends.topics_are_similar(title, "ワンピース 最新話")
+
+
+def test_japanese_source_can_support_anchored_english_research():
+    from agents import researcher
+    source = "ホタルの嫁入り 第二話 予告"
+    context = {"content_angle": "Hotaru no Yomeiri episode two character explanation"}
+    result = {"source_trend": source, "topic": "Hotaru no Yomeiri character explanation"}
+    assert researcher._validate_topic_integrity(result, source, context) is result
+    with pytest.raises(ValueError, match="topic drifted"):
+        researcher._validate_topic_integrity(
+            {"source_trend": source, "topic": "Bitcoin price forecast"}, source, context)
