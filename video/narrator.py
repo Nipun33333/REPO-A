@@ -1,10 +1,8 @@
 """
-Narrator — Microsoft Edge TTS ONLY.
-Generates Edge voiceover and synchronized SRT captions for video rendering.
+Narrator — local Kokoro Michael male voice.
+Generates voiceover and proportionally timed SRT captions for video rendering.
 
-Recommended edge-tts version: 7.2.8. The optional EDGE_TTS_PROXY environment
-variable is used ONLY for Edge TTS WebSocket requests.
-A proxy is not a guaranteed fix for HTTP 403 responses from Microsoft.
+Legacy Edge TTS helpers remain available; normal narration uses Kokoro locally.
 
 """
 import os
@@ -633,9 +631,18 @@ def generate_narration(script: dict, output_dir: str) -> str:
     audio_path = os.path.join(output_dir, "narration.mp3")
     srt_path   = os.path.join(output_dir, "narration.srt")
 
-    print(f"   → Synthesising {len(full_text.split())} words via Edge TTS…")
-    print(f"   → Edge TTS network route: {'configured proxy' if _edge_proxy() else 'direct'}")
-    asyncio.run(_synthesise(full_text, audio_path, srt_path))
+    from video.offline_tts import synthesise, VOICE_LABEL
+    print(f"   → Synthesising {len(full_text.split())} words via {VOICE_LABEL}…")
+    try:
+        synthesise(full_text, audio_path)
+        _build_sentence_srt(full_text, audio_path, srt_path)
+    except Exception:
+        for stale in (audio_path, srt_path):
+            try:
+                os.remove(stale)
+            except FileNotFoundError:
+                pass
+        raise
 
     # ── Post-run report ──────────────────────────────────────────────────────
     size_kb     = os.path.getsize(audio_path) // 1024

@@ -67,111 +67,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ======================================
-      # NEW: EDGE TTS REAL CONNECTION TEST
-      # ======================================
-
-      - name: Test Edge TTS Directly
+      - name: Prepare and verify local voiceover and background music
         shell: bash
         run: |
+          python -m video.offline_tts --download
           python - <<'PY'
-          import asyncio
-          import os
-          import sys
-          import importlib.metadata
-          import edge_tts
+          import tempfile
+          from pathlib import Path
+          import config
+          from video.narrator import generate_narration
+          from video.offline_tts import validate_audio
+          from video.music import mix_music_with_narration
 
-          print("=" * 45)
-          print("EDGE TTS DIAGNOSTIC TEST")
-          print("=" * 45)
-
-          version = importlib.metadata.version("edge-tts")
-          print("Installed Edge TTS version:", version)
-
-          async def test_edge_tts():
-              voice = "en-US-AndrewNeural"
-
-              print("Voice:", voice)
-              print("Testing Microsoft Edge TTS...")
-              print("Generating sample audio...")
-
-              communicator = edge_tts.Communicate(
-                  text="Hello, this is a test of Microsoft Edge Text to Speech.",
-                  voice=voice,
-                  rate="-5%",
-                  pitch="-3Hz",
+          with tempfile.TemporaryDirectory() as output:
+              audio = generate_narration({"sections": [{"narration":
+                  "Here is what happened, why it matters, and what comes next. "
+                  "Let us walk through the facts, one step at a time."
+              }]}, output)
+              validate_audio(audio)
+              assert " --> " in Path(output, "narration.srt").read_text()
+              mixed = mix_music_with_narration(
+                  audio, str(Path(output, "mixed.mp3")),
+                  config.MUSIC_VOLUME, config.MUSIC_LIBRARY_DIR,
               )
-
-              output = "/tmp/edge_tts_test.mp3"
-
-              await asyncio.wait_for(
-                  communicator.save(output),
-                  timeout=60
-              )
-
-              if not os.path.isfile(output):
-                  raise RuntimeError(
-                      "Edge TTS did not create audio file"
-                  )
-
-              size = os.path.getsize(output)
-
-              print("Generated audio size:", size)
-
-              if size < 1000:
-                  raise RuntimeError(
-                      "Edge TTS returned invalid or empty audio"
-                  )
-
-              print("=" * 45)
-              print("EDGE TTS TEST PASSED")
-              print("Real audio generated successfully")
-              print("=" * 45)
-
-          try:
-              asyncio.run(test_edge_tts())
-
-          except Exception as error:
-              print("=" * 45)
-              print("EDGE TTS TEST FAILED")
-              print("=" * 45)
-
-              print(
-                  "Error Type:",
-                  type(error).__name__
-              )
-
-              status = getattr(
-                  error, "status", None
-              )
-
-              if status is not None:
-                  print("HTTP Status:", status)
-
-              if status == 403:
-                  print(
-                      "Microsoft Edge TTS rejected the request."
-                  )
-                  print(
-                      "Possible endpoint or access restriction."
-                  )
-
-              elif isinstance(error, asyncio.TimeoutError):
-                  print(
-                      "Edge TTS connection timed out."
-                  )
-
-              elif isinstance(error, edge_tts.exceptions.NoAudioReceived):
-                  print(
-                      "Edge TTS returned no audio."
-                  )
-
-              else:
-                  print(
-                      "Check TTS connection, voice and library."
-                  )
-
-              sys.exit(1)
+              validate_audio(mixed)
+              assert Path(mixed).read_bytes() != Path(audio).read_bytes(), "Music was not mixed"
+              print("Michael male voice, captions and background music verified.")
           PY
 
       # ======================================

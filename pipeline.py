@@ -38,6 +38,7 @@ from agents.topic_validation import (
 )
 from agents.us_trends import save_used_topic
 from video.narrator import generate_narration
+from video.music import mix_music_with_narration
 from video.stock import download_videos
 from video.creator import create_video
 from uploader.youtube import upload_to_youtube, _create_thumbnail
@@ -273,7 +274,7 @@ def run():
     # ── 4. Narration ──────────────────────────────────────────
     banner(
         "4 / 6  ·  Generating voiceover  "
-        "[Edge TTS — free]"
+        "[Kokoro Michael — free]"
     )
 
     with timed_stage("tts_captions"):
@@ -281,6 +282,15 @@ def run():
             script,
             config.OUTPUT_DIR
         )
+
+    if config.MUSIC_ENABLED:
+        with timed_stage("background_music"):
+            audio_path = mix_music_with_narration(
+                audio_path,
+                os.path.join(config.OUTPUT_DIR, "narration_mixed.mp3"),
+                music_volume=config.MUSIC_VOLUME,
+                library_dir=config.MUSIC_LIBRARY_DIR,
+            )
 
     print(f"\n  ✅  Audio: {audio_path}")
 
