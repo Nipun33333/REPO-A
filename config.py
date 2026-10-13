@@ -29,16 +29,15 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()
 # ---------------------------------------------------------------------------
 # Channel / niche
 # ---------------------------------------------------------------------------
-CONTENT_MODE = "US_TREND_EXPLANATION"
+CONTENT_MODE = "MOVIE_ANIME_EXPLANATION"
 CHANNEL_NAME = os.getenv("CHANNEL_NAME", "US Trending Explained").strip()
 CHANNEL_DESCRIPTION = """
-A current-trends YouTube channel focused on explaining the most important and
-fast-rising topics currently trending in the United States. The subject may
-come from any subject area that is genuinely trending. The pipeline must follow
-the selected current trend itself rather than forcing it into a fixed niche,
-fixed category allowlist, or keyword list. Every video should explain the exact
-selected trend, why it is trending now, the important context, and what viewers
-need to know next.
+A YouTube channel about US/Hollywood movies, Japanese anime and US-produced
+anime/anime-inspired animation. Discover current trending works and explain
+their stories, endings, characters, hidden details, easter eggs, trailers and
+relevant developments. Keep every claim tied to the selected work; distinguish
+fan theories from confirmed details. Exclude unrelated general trends, news,
+sports, technology, gaming-only content and celebrity gossip.
 """.strip()
 
 # ---------------------------------------------------------------------------

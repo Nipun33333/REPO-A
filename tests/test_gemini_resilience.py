@@ -2,6 +2,8 @@ import importlib.util
 import sys
 import types
 import time
+import pytest
+import httpx
 
 
 def load_client(monkeypatch):
@@ -153,3 +155,75 @@ def test_config_fallback_includes_25_free_backups():
     text = Path("config.py").read_text()
     assert "gemini-2.5-flash-lite" in text
     assert "gemini-2.5-flash" in text
+
+
+class ProviderError(Exception):
+    def __init__(self, code):
+        self.code = code
+        super().__init__("provider response; unrelated request id 403")
+
+
+def test_504_then_499_falls_back_and_keeps_working_model(monkeypatch):
+    client = load_client(monkeypatch)
+    calls = []
+    responses = iter([ProviderError(504), ProviderError(499), "selected", "researched"])
+    def generate(model, contents, timeout_seconds=None):
+        calls.append(model)
+        response = next(responses)
+        if isinstance(response, Exception):
+            raise response
+        return response
+    monkeypatch.setattr(client, "_generate_once", generate)
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+    assert client.generate("selection") == "selected"
+    assert client.generate("research") == "researched"
+    assert calls == ["model-a", "model-a", "model-b", "model-b"]
+
+
+@pytest.mark.parametrize("code", [404, 408, 429, 499, 500, 502, 503, 504, 529])
+def test_structured_recoverable_status(monkeypatch, code):
+    client = load_client(monkeypatch)
+    assert client._is_model_failover_error(ProviderError(code))
+
+
+@pytest.mark.parametrize("error", [TimeoutError(), ConnectionError(), httpx.ReadTimeout(""), httpx.ConnectError("")])
+def test_empty_message_transport_failures_recover(monkeypatch, error):
+    client = load_client(monkeypatch)
+    assert client._is_model_failover_error(error)
+
+
+@pytest.mark.parametrize("code", [400, 401, 402, 403, 422])
+def test_permanent_errors_fail_without_retry(monkeypatch, code):
+    client = load_client(monkeypatch)
+    calls = []
+    def fail(*args, **kwargs):
+        calls.append(args[0])
+        raise ProviderError(code)
+    monkeypatch.setattr(client, "_generate_once", fail)
+    with pytest.raises(RuntimeError, match=str(code)):
+        client.generate("selection")
+    assert calls == ["model-a"]
+
+
+def test_499_exhaustion_is_bounded_and_sanitized(monkeypatch, capsys):
+    client = load_client(monkeypatch)
+    client.config.GEMINI_TASK_MAX_RETRIES = 1
+    calls = []
+    def fail(*args, **kwargs):
+        calls.append(args[0])
+        raise ProviderError(499)
+    monkeypatch.setattr(client, "_generate_once", fail)
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+    with pytest.raises(RuntimeError, match="All configured Gemini models failed") as caught:
+        client.generate("selection", max_models=2)
+    assert len(calls) == 8
+    assert "provider response" not in str(caught.value) + capsys.readouterr().out
+
+
+def test_user_interrupt_is_not_retried(monkeypatch):
+    client = load_client(monkeypatch)
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt()
+    monkeypatch.setattr(client, "_generate_once", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        client.generate("selection")

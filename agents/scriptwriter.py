@@ -44,7 +44,10 @@ PREVIOUS VALIDATION ERROR:
 Correct that problem in the COMPLETE JSON. Do not change the selected subject.
 """
 
-    return f"""You are a professional YouTube current-trend explanation scriptwriter.
+    return f"""You are a professional YouTube US movie and Japanese/US anime explanation scriptwriter.
+Focus on the selected work's story, ending, character/lore, supported hidden details,
+trailer clues or relevant developments. Separate fan theories from confirmed canon.
+Never invent an easter egg, scene, quote or plot twist to make the story more exciting.
 
 SELECTED SUBJECT:
 {research['topic']}
@@ -53,7 +56,7 @@ SOURCE SUBJECT:
 {research.get('source_trend', research['topic'])}
 
 CONTENT DOMAIN:
-{research.get('content_domain', 'GENERAL_TREND')}
+{research['content_domain']}
 
 CONTENT TYPE:
 {research.get('content_type', 'EXPLAINER')}
@@ -112,7 +115,7 @@ JSON shape:
   "tags": ["..."],
   "topic": "{research['topic']}",
   "source_trend": "{research.get('source_trend', research['topic'])}",
-  "content_domain": "{research.get('content_domain', 'GENERAL_TREND')}",
+  "content_domain": "{research['content_domain']}",
   "content_type": "{research.get('content_type', 'EXPLAINER')}",
   "video_type": "{'shorts' if short else 'long'}",
   "sections": []
@@ -142,7 +145,7 @@ def _normalize_script_fields(script: dict, research: dict, video_type: str) -> d
     script["video_type"] = "shorts" if video_type == "shorts" else "long"
     script["topic"] = research.get("topic", "").strip()
     script["source_trend"] = research.get("source_trend", script["topic"])
-    script["content_domain"] = research.get("content_domain", "GENERAL_TREND")
+    script["content_domain"] = research["content_domain"]
     script["content_type"] = research.get("content_type", "EXPLAINER")
     return script
 

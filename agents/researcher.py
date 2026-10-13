@@ -1,4 +1,4 @@
-"""Research agent for current US trending topics."""
+"""Research agent for US movie and Japanese/US anime explanations."""
 from __future__ import annotations
 
 import json
@@ -150,7 +150,7 @@ def _validate_topic_integrity(
 
 def _research_selected_candidate(trend: dict, channel_description: str, banned: list[str]) -> dict:
     selected = trend["selected_trend"]
-    prompt = f"""You are the research planner for a current US-trending-topic YouTube channel.
+    prompt = f"""You are the research planner for a US movies and Japanese/US anime YouTube channel.
 
 CHANNEL:
 {channel_description}
@@ -159,7 +159,7 @@ SELECTED CURRENT SUBJECT:
 {selected}
 
 SEMANTIC DOMAIN:
-{trend.get('content_domain','GENERAL_TREND')}
+{trend['content_domain']}
 
 CONTENT TYPE:
 {trend.get('content_type','EXPLAINER')}
@@ -180,8 +180,10 @@ BANNED USER TOPICS:
 {json.dumps(banned)}
 
 Create a concise research plan for ONE explanation video about the selected subject.
-Keep the underlying subject unchanged. You may explain why it is trending, the
-important context, what happened, who/what is involved, the timeline, or how it works.
+Keep the underlying work unchanged. Explain its story or ending, character/lore,
+supported hidden details/easter eggs, trailer clues, or relevant current developments.
+Label fan theories and interpretations clearly; never present them as confirmed canon.
+Do not turn the topic into general celebrity gossip or unrelated news.
 Do not invent precise dates, quotes, statistics, plot details, or announcements
 that are not reasonably supportable. When the source only gives a title, keep
 claims appropriately cautious.
@@ -191,7 +193,7 @@ Return ONLY JSON:
   "topic": "specific explanation topic centered on the selected subject",
   "source_trend": "exact selected subject",
   "content_type": "EXPLAINER | BREAKDOWN | ANALYSIS | NEWS_EXPLAINER | CONTEXT | TIMELINE | HOW_IT_WORKS | RECAP | TREND_EXPLAINER",
-  "content_domain": "GENERAL_TREND",
+  "content_domain": "{trend['content_domain']}",
   "video_title": "clickable title under 70 characters",
   "description": "short description focused only on this subject",
   "hook_question": "strong opening question about this subject",
@@ -204,6 +206,8 @@ Return ONLY JSON:
 }}
 """
     data = _validate_research(_clean_json(generate(prompt)))
+    # The domain is owned by the selection gate, not a research rewrite.
+    data["content_domain"] = trend["content_domain"]
     data["selected_candidate_id"] = trend.get("candidate_id", "")
     data["trend_score"] = trend.get("trend_score", 0)
     data["semantic_confidence"] = trend.get("semantic_confidence", 0)
@@ -220,13 +224,13 @@ def research_topic(channel_description: str, topic_override: str = "", focus_ang
             "description": "User-supplied topic accepted by semantic trend gate.",
             "channel": "manual",
             "views": 0,
-            "content_domain": gate.get("content_domain", "GENERAL_TREND"),
+            "content_domain": gate["content_domain"],
             "content_type": gate.get("content_type", "EXPLAINER"),
             "content_angle": focus_angle.strip() or gate.get("content_angle", "Explain the current topic clearly and directly."),
         }
     else:
-        print("\n   🎬 AUTOMATIC CURRENT-US-TREND MODE")
-        print("   → No fixed topic keyword list or niche gate is used.")
+        print("\n   🎬 AUTOMATIC MOVIE / ANIME EXPLANATION MODE")
+        print("   → US movies and Japanese/US anime only: explanations, hidden details and relevant trends.")
         trend = get_best_us_trending_topic(channel_description)
     data = _research_selected_candidate(trend, channel_description, banned)
     print(f"   ✅ Final explanation topic: {safe_log_text(data['topic'])}")

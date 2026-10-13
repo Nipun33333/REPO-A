@@ -4,7 +4,7 @@
 
 # 🎬 YTAGENT — Current US Trending-Topic Explanation Studio
 
-**A dynamic AI pipeline for current US trending-topic explanation videos. The selected trend can come from any broad topic category and becomes the canonical subject for research, script, media, and upload.**
+**An AI pipeline for US/Hollywood movies and Japanese/US anime: story and ending explanations, hidden details, trailer breakdowns and relevant current trends. The selected work remains the subject throughout research, script, media and upload.**
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![Gemini](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?style=flat-square&logo=google&logoColor=white)](https://aistudio.google.com)
@@ -22,7 +22,7 @@
 
 | Feature | Details |
 |---|---|
-| 🧠 **Dynamic Discovery** | Broad current US YouTube signals + one semantic Gemini trend selector — no fixed topic keyword list or niche restriction |
+| 🧠 **Dynamic Discovery** | Recent movie/anime searches + US/JP Film & Animation charts, followed by a mandatory movie/anime gate; no fixed franchise list |
 | ✍️ **Script Writing** | Full narrated script with hook, sections, and CTA — in JSON |
 | 🎙️ **Free Voice** | Microsoft Edge TTS (no API key, no cost, word-level timing) |
 | 🖼️ **Stock Images** | Auto-downloads from Pexels with topic-aware search |
@@ -90,14 +90,14 @@ python pipeline.py
 The CLI pipeline automatically discovers, validates, generates and publishes:
 
 ```
-US trends → Research → Valid script → Optional optimization → Footage
+Movie/anime discovery → Research → Valid script → Optional optimization → Footage
                                                               ↓
 YouTube ← Automatic OAuth upload ← Thumbnail/video render ← Narration
 ```
 
 | Phase | Agent | What it does |
 |---|---|---|
-| 1 · Research | `agents/researcher.py` | Explains the selected real US trend, with no fixed niche |
+| 1 · Research | `agents/researcher.py` | Explains the selected US movie or Japanese/US anime, with supported details and clearly labelled theories |
 | 2 · Script | `agents/scriptwriter.py` | Three-section Shorts or nine-section long scripts, four subject-specific video queries per section |
 | Optional optimization | `agents/content_optimization/` | Reviewed hooks, titles, thumbnail text, SEO, pacing checks and quality report; disabled by default |
 | 3 · Narration | `video/narrator.py` | Edge-TTS converts the script to a cinematic MP3 voiceover |

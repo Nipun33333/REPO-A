@@ -190,7 +190,7 @@ def run():
     print(f"  Video type selected: {video_type.upper()}")
 
     # ── 1. Research ───────────────────────────────────────────
-    banner("1 / 6  ·  Discovering current US trending topic  [Gemini]")
+    banner("1 / 6  ·  Discovering current movie / anime topic  [Gemini]")
     print(f"  → Gemini model in use: {get_active_model()}")
 
     with timed_stage("trend_discovery_research_finalization"):
