@@ -12,6 +12,11 @@ on:
       - "requirements.txt"
       - ".github/workflows/python-tests.yml"
   workflow_dispatch:
+    inputs:
+      live_discovery:
+        description: "Also check live movie/anime discovery, research and script (no upload)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,8 +33,34 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest python-dotenv requests Pillow
+          python -m pip install pytest python-dotenv requests Pillow httpx
       - name: Run deterministic regression tests
         run: |
           python -m compileall -q agents tests
           python -m pytest -q
+      - name: Install Gemini SDK for live check
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.live_discovery }}
+        run: python -m pip install 'google-genai>=1.0.0'
+      - name: Check live movie and anime pipeline without uploading
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.live_discovery }}
+        timeout-minutes: 10
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          python - <<'PY'
+          import config
+          from agents.researcher import research_topic
+          from agents.scriptwriter import write_script
+          from agents.topic_validation import validate_research_topic_lock, validate_script_topic_lock
+          from agents.safe_logging import safe_error_summary, safe_log_text
+          try:
+              research = research_topic(config.CHANNEL_DESCRIPTION)
+              validate_research_topic_lock(research)
+              script = write_script(research, "shorts")
+              validate_script_topic_lock(script, research)
+              print("Live discovery, research and script passed:", safe_log_text(research["topic"]), research["content_domain"])
+          except Exception as exc:
+              print("Live check failed:", safe_error_summary(exc))
+              raise SystemExit(1) from None
+          PY

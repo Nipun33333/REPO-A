@@ -297,7 +297,7 @@ input[type=range]{width:100%;accent-color:var(--primary)}
             <!-- AI mode panel -->
             <div id="panel-ai">
               <div class="field-label" style="margin-bottom:4px">Discovery Mode</div>
-              <div class="help-text">AI scans broad current US YouTube signals and semantically selects one explainable trending subject. No fixed topic keyword list or niche restriction is used.</div>
+              <div class="help-text">AI discovers US movies and Japanese/US anime for story explanations, hidden details, trailer breakdowns and relevant trends. Automatic and manual topics must fit this niche.</div>
             </div>
 
             <!-- Manual mode panel -->
@@ -349,14 +349,7 @@ input[type=range]{width:100%;accent-color:var(--primary)}
           <div>
             <div class="field-label">Video Format</div>
             <div style="display:flex;gap:8px">
-              <button id="fmt-normal" class="fmt-btn fmt-active" onclick="setFormat('normal')">
-                <span style="font-size:16px">📺</span>
-                <span>
-                  <div style="font-weight:700;font-size:12px">Normal Video</div>
-                  <div style="font-size:10px;color:var(--muted)">16:9 · 6-8 min · 1920×1080</div>
-                </span>
-              </button>
-              <button id="fmt-shorts" class="fmt-btn" onclick="setFormat('shorts')">
+              <button id="fmt-shorts" class="fmt-btn fmt-active">
                 <span style="font-size:16px">📱</span>
                 <span>
                   <div style="font-weight:700;font-size:12px">YouTube Shorts</div>
@@ -368,7 +361,7 @@ input[type=range]{width:100%;accent-color:var(--primary)}
 
           <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
             <button class="btn btn-primary btn-full" id="gen-btn" onclick="startGeneration()" style="padding:13px">
-              🚀 Generate Full Video
+              📱 Generate YouTube Short
             </button>
             <button class="btn btn-danger" id="stop-btn" onclick="stopPipeline()"
                     style="padding:13px 16px;display:none" title="Stop after current step">
@@ -778,7 +771,7 @@ let _es = null;
 let _pollInterval = null;
 
 // ── Video format toggle ───────────────────────────────────
-let _videoType = 'normal';
+const _videoType = 'shorts';
 
 function setTopicMode(mode) {
   const isAI = mode === 'ai';
@@ -790,22 +783,6 @@ function setTopicMode(mode) {
   // Show correct panel
   document.getElementById('panel-ai').style.display     = isAI ? 'block' : 'none';
   document.getElementById('panel-manual').style.display = isAI ? 'none'  : 'block';
-}
-
-function setFormat(type) {
-  _videoType = type;
-  document.getElementById('fmt-normal').classList.toggle('fmt-active', type === 'normal');
-  document.getElementById('fmt-shorts').classList.toggle('fmt-active', type === 'shorts');
-  // Update generate button label
-  document.getElementById('gen-btn').textContent =
-    type === 'shorts' ? '📱 Generate YouTube Short' : '🚀 Generate Full Video';
-  // Update manual mode placeholder for Shorts vs Normal
-  const manualInput = document.getElementById('topic-input');
-  if (manualInput) {
-    manualInput.placeholder = type === 'shorts'
-      ? 'e.g. Explain a recent trending topic'
-      : 'e.g. Explain a recent trending topic';
-  }
 }
 
 function startGeneration() {

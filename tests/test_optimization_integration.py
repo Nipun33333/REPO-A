@@ -39,13 +39,21 @@ def test_pipeline_offline_integration(monkeypatch, tmp_path, research, script, p
     seen = []
     monkeypatch.setattr(pipeline, "download_videos", lambda s, *a: seen.append(s) or {})
     monkeypatch.setattr(pipeline, "generate_narration", lambda *a: str(output / "audio.mp3"))
-    monkeypatch.setattr(pipeline, "create_video", lambda *a, **kw: str(output / "final.mp4"))
+    mix = Mock(return_value=str(output / "narration_mixed.mp3"))
+    monkeypatch.setattr(pipeline, "mix_music_with_narration", mix)
+    render = Mock(return_value=str(output / "final.mp4"))
+    monkeypatch.setattr(pipeline, "create_video", render)
     saved = Mock()
     monkeypatch.setattr(pipeline, "save_used_topic", saved)
     upload = Mock(side_effect=AssertionError("must not upload"))
     monkeypatch.setattr(pipeline, "upload_to_youtube", upload)
     monkeypatch.setattr(pipeline, "_create_thumbnail", lambda *_: "")
     pipeline.run()
+    mix.assert_called_once_with(
+        str(output / "audio.mp3"), str(output / "narration_mixed.mp3"),
+        music_volume=.15, library_dir=pipeline.config.MUSIC_LIBRARY_DIR,
+    )
+    assert render.call_args.args[1] == str(output / "narration_mixed.mp3")
     upload.assert_not_called()
     saved.assert_called_once_with(research["source_trend"])
     assert not (output / "stale.txt").exists()

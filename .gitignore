@@ -53,3 +53,6 @@ desktop.ini
 
 # Local reference only; never vendor the nested repository.
 .yt-skill-reference/
+
+# Downloaded speech weights and isolated voice runtime
+.tts-models/

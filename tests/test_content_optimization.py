@@ -17,7 +17,7 @@ from agents.topic_validation import validate_script_topic_lock
 @pytest.fixture
 def research():
     return {"topic": "Artemis lunar mission", "source_trend": "Artemis lunar mission",
-            "video_title": "Artemis lunar mission overview", "content_domain": "GENERAL_TREND",
+            "video_title": "Artemis lunar mission overview", "content_domain": "US_MOVIE",
             "content_type": "EXPLAINER"}
 
 

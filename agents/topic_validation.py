@@ -4,7 +4,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-ALLOWED_CONTENT_DOMAINS = {"GENERAL_TREND"}
+ALLOWED_CONTENT_DOMAINS = {"US_MOVIE", "JAPANESE_ANIME", "US_ANIME"}
+_JAPANESE_TEXT = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
 ALLOWED_CONTENT_TYPES = {
     "EXPLAINER", "BREAKDOWN", "ANALYSIS", "NEWS_EXPLAINER", "CONTEXT",
     "TIMELINE", "HOW_IT_WORKS", "RECAP", "TREND_EXPLAINER",
@@ -105,6 +106,8 @@ def validate_research_topic_lock(research: dict) -> None:
 
     anchors = _source_anchor_terms(research)
     topic = str(research.get("topic", "")).strip()
+    if _JAPANESE_TEXT.search(topic):
+        raise ValueError("Research topic must use English/romanized work names for English narration.")
     if not topic or not _matches_terms(anchors, topic):
         raise ValueError("Research topic lock failed for topic.")
     # Title/description/hook may be creative rewrites. The canonical subject
@@ -125,6 +128,8 @@ def repair_script_video_queries(script: dict, research: dict) -> list[str]:
     Returns the fields changed, for pipeline diagnostics.
     """
     source = str(research.get("source_trend") or research.get("topic") or "").strip()
+    if _JAPANESE_TEXT.search(source):
+        source = str(research.get("topic") or source).strip()
     if not topic_terms(source):
         # A missing/generic research subject is a genuine failure; do not
         # manufacture a topic or silently bypass downstream validation.
@@ -209,6 +214,8 @@ def validate_script_topic_lock(script: dict, research: dict | None = None) -> No
 
         if not narration:
             raise ValueError(f"Section {sid} narration is empty.")
+        if _JAPANESE_TEXT.search(narration):
+            raise ValueError(f"Section {sid} narration must use English and romanized anime names.")
 
         # CTA narration may be topic-light by design. All other sections must
         # contain at least one research-derived anchor. This avoids the false

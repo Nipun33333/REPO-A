@@ -15,7 +15,7 @@ def research():
         "source_trend": "The Inevitable End of Halo Studios",
         "video_title": "The End of Halo Studios: What Happens Next?",
         "hook_question": "What is next for Halo Studios?",
-        "content_domain": "GENERAL_TREND",
+        "content_domain": "US_MOVIE",
         "content_type": "NEWS_EXPLAINER",
         "content_angle": "Halo Studios restructuring and the Halo franchise",
         "key_points": ["Halo Studios leadership", "Halo franchise outlook"],
@@ -45,7 +45,7 @@ def script(research):
         "video_type": "shorts",
         "topic": research["topic"],
         "source_trend": research["source_trend"],
-        "content_domain": "GENERAL_TREND",
+        "content_domain": "US_MOVIE",
         "content_type": "NEWS_EXPLAINER",
         "sections": sections,
     }

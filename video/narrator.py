@@ -1,10 +1,9 @@
 """
-Narrator — Microsoft Edge TTS (100% free)
-Generates broadcast-quality voiceover + word-level subtitle (SRT) file.
-The SRT is used by the Shorts creator to burn in synced captions.
+Narrator — local Kokoro Michael male voice.
+Generates voiceover and proportionally timed SRT captions for video rendering.
 
-Compatible with all edge-tts versions (6.0 → 7.x).
-Uses MoviePy's AudioFileClip for duration — guaranteed to match the video render.
+Legacy Edge TTS helpers remain available; normal narration uses Kokoro locally.
+
 """
 import os
 import re
@@ -216,6 +215,60 @@ def _build_sentence_srt(text: str, audio_path: str, srt_path: str) -> int:
 
 
 # ══════════════════════════════════════════════════════════════
+#  EDGE CONNECTION (EDGE TTS ONLY — NO OTHER VOICE ENGINE)
+# ══════════════════════════════════════════════════════════════
+
+class EdgeTTSAccessDenied(RuntimeError):
+    """Microsoft rejected the Edge TTS WebSocket request with HTTP 403."""
+
+
+def _edge_proxy() -> str | None:
+    """Read a trusted proxy URL; never display its credentials in logs."""
+    proxy = os.environ.get("EDGE_TTS_PROXY", "").strip()
+    return proxy or None
+
+
+def _make_communicate(text: str):
+    """Configure Edge TTS for the selected voice and an optional network route."""
+    kwargs = {
+        "rate": config.VOICE_RATE,
+        "pitch": config.VOICE_PITCH,
+        "boundary": "WordBoundary",
+    }
+    proxy = _edge_proxy()
+    if proxy:
+        kwargs["proxy"] = proxy
+
+    # edge-tts 7.2.8 supports all these arguments. Keep older 6.x support
+    # for boundary= only; never silently drop a requested proxy.
+    try:
+        return edge_tts.Communicate(text, config.VOICE_ID, **kwargs)
+    except TypeError:
+        kwargs.pop("boundary", None)
+        try:
+            return edge_tts.Communicate(text, config.VOICE_ID, **kwargs)
+        except TypeError:
+            if proxy:
+                raise RuntimeError(
+                    "Installed edge-tts does not support proxy=. "
+                    "Install edge-tts==7.2.8."
+                ) from None
+            raise
+
+
+def _is_forbidden(error: BaseException) -> bool:
+    """Detect HTTP 403 without printing sensitive signed connection URLs."""
+    return getattr(error, "status", None) == 403 or isinstance(error, EdgeTTSAccessDenied)
+
+
+def _safe_tts_error(error: BaseException) -> str:
+    """A short error summary without URLs, tokens, or proxy credentials."""
+    if _is_forbidden(error):
+        return "HTTP 403 (Edge TTS WebSocket rejected)"
+    return type(error).__name__
+
+
+# ══════════════════════════════════════════════════════════════
 #  TTS SYNTHESIS
 # ══════════════════════════════════════════════════════════════
 
@@ -225,22 +278,7 @@ async def _synthesise_single(text: str, audio_path: str, srt_path: str) -> int:
     Tries SubMaker → raw WordBoundary events → sentence fallback.
     Returns the number of SRT cues written.
     """
-    try:
-        communicate = edge_tts.Communicate(
-            text,
-            config.VOICE_ID,
-            rate=config.VOICE_RATE,
-            pitch=config.VOICE_PITCH,
-            boundary="WordBoundary",
-        )
-    except TypeError:
-        # Backward compatibility with older edge-tts versions.
-        communicate = edge_tts.Communicate(
-            text,
-            config.VOICE_ID,
-            rate=config.VOICE_RATE,
-            pitch=config.VOICE_PITCH,
-        )
+    communicate = _make_communicate(text)
 
     # Instantiate SubMaker (may not exist in very old edge-tts)
     try:
@@ -286,13 +324,25 @@ async def _synthesise_single(text: str, audio_path: str, srt_path: str) -> int:
                     "end_ms":   offset_ms + duration_ms,
                 })
 
-    timeout_s = float(getattr(config, "EDGE_TTS_TIMEOUT_SECONDS", 120))
+    timeout_s = max(5.0, float(getattr(config, "EDGE_TTS_TIMEOUT_SECONDS", 120)))
     try:
         await asyncio.wait_for(_collect_events(), timeout=timeout_s)
-    except asyncio.TimeoutError as e:
+    except asyncio.TimeoutError:
         raise TimeoutError(
             f"Edge TTS timed out after {timeout_s:.0f}s while streaming narration."
-        ) from e
+        ) from None
+    except Exception as error:
+        if _is_forbidden(error):
+            # Never emit the original aiohttp traceback: it can include a
+            # WebSocket URL with query-string tokens or proxy information.
+            raise EdgeTTSAccessDenied(
+                "Edge TTS HTTP 403: Microsoft rejected the WebSocket request. "
+                "GitHub-hosted Ubuntu and Windows were rejected in your tests. "
+                "edge-tts version changes or retries cannot guarantee access. "
+                "Set EDGE_TTS_PROXY to a trusted, authorized working HTTP proxy "
+                "if you have one, otherwise try another permitted network."
+            ) from None
+        raise
 
     # ── Save audio (must happen before any duration checks) ─────────────────
     if not audio_chunks:
@@ -486,6 +536,40 @@ def _concat_audio_files(input_paths: list[str], output_path: str) -> None:
             pass
 
 
+async def _synthesise_with_retries(
+    text: str, audio_path: str, srt_path: str, attempts: int
+) -> int:
+    """Retry temporary TTS failures; fail fast and safely on HTTP 403."""
+    attempts = max(1, int(attempts))
+    for attempt in range(1, attempts + 1):
+        try:
+            cues = await _synthesise_single(text, audio_path, srt_path)
+            if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+                raise RuntimeError("Edge TTS generated empty audio")
+            return cues
+        except EdgeTTSAccessDenied:
+            raise
+        except Exception as error:
+            if _is_forbidden(error):
+                raise EdgeTTSAccessDenied("Edge TTS HTTP 403: access denied") from None
+            print(
+                f"   ⚠ Edge TTS attempt {attempt}/{attempts} failed: "
+                f"{_safe_tts_error(error)}"
+            )
+            for stale in (audio_path, srt_path):
+                try:
+                    os.remove(stale)
+                except FileNotFoundError:
+                    pass
+            if attempt == attempts:
+                raise RuntimeError(
+                    f"Edge TTS failed after {attempts} attempts "
+                    f"({_safe_tts_error(error)})."
+                ) from None
+            await asyncio.sleep(min(2 ** (attempt - 1), 8))
+    raise RuntimeError("Unreachable Edge TTS retry state")
+
+
 async def _synthesise(text: str, audio_path: str, srt_path: str) -> int:
     """Synthesize long narration in bounded chunks so Edge TTS cannot choke on a 1k+ word request."""
     max_words = int(getattr(config, "EDGE_TTS_CHUNK_WORDS", 260))
@@ -493,7 +577,7 @@ async def _synthesise(text: str, audio_path: str, srt_path: str) -> int:
     chunks = _split_text_for_tts(text, max_words)
 
     if len(chunks) <= 1:
-        return await _synthesise_single(text, audio_path, srt_path)
+        return await _synthesise_with_retries(text, audio_path, srt_path, max_retries)
 
     print(f"   → Long narration: splitting {len(text.split())} words into {len(chunks)} Edge TTS chunks (≤{max_words} words each)…")
     temp_dir = tempfile.mkdtemp(prefix="edge_tts_chunks_", dir=os.path.dirname(audio_path) or None)
@@ -504,31 +588,10 @@ async def _synthesise(text: str, audio_path: str, srt_path: str) -> int:
         for index, chunk in enumerate(chunks, 1):
             chunk_audio = os.path.join(temp_dir, f"part_{index:03d}.mp3")
             chunk_srt = os.path.join(temp_dir, f"part_{index:03d}.srt")
-            last_error: Exception | None = None
-
             print(f"      → TTS chunk {index}/{len(chunks)}: {len(chunk.split())} words")
-            for attempt in range(1, max_retries + 1):
-                try:
-                    await _synthesise_single(chunk, chunk_audio, chunk_srt)
-                    if not os.path.exists(chunk_audio) or os.path.getsize(chunk_audio) == 0:
-                        raise RuntimeError("Edge TTS produced an empty audio chunk.")
-                    last_error = None
-                    break
-                except Exception as e:
-                    last_error = e
-                    print(f"         ⚠ Chunk {index} attempt {attempt}/{max_retries} failed: {e}")
-                    for stale in (chunk_audio, chunk_srt):
-                        try:
-                            os.remove(stale)
-                        except OSError:
-                            pass
-                    if attempt < max_retries:
-                        await asyncio.sleep(min(2 * attempt, 6))
-
-            if last_error is not None:
-                raise RuntimeError(
-                    f"Edge TTS failed for chunk {index}/{len(chunks)} after {max_retries} attempts: {last_error}"
-                ) from last_error
+            await _synthesise_with_retries(
+                chunk, chunk_audio, chunk_srt, max_retries
+            )
 
             duration_ms = _get_audio_duration_ms(chunk_audio)
             audio_parts.append(chunk_audio)
@@ -562,11 +625,24 @@ def generate_narration(script: dict, output_dir: str) -> str:
         parts.append(narration)
 
     full_text  = "  ...  ".join(parts)
+    if not full_text.strip():
+        raise ValueError("No usable narration text in script sections")
+    os.makedirs(output_dir, exist_ok=True)
     audio_path = os.path.join(output_dir, "narration.mp3")
     srt_path   = os.path.join(output_dir, "narration.srt")
 
-    print(f"   → Synthesising {len(full_text.split())} words via Edge TTS…")
-    asyncio.run(_synthesise(full_text, audio_path, srt_path))
+    from video.offline_tts import synthesise, VOICE_LABEL
+    print(f"   → Synthesising {len(full_text.split())} words via {VOICE_LABEL}…")
+    try:
+        synthesise(full_text, audio_path)
+        _build_sentence_srt(full_text, audio_path, srt_path)
+    except Exception:
+        for stale in (audio_path, srt_path):
+            try:
+                os.remove(stale)
+            except FileNotFoundError:
+                pass
+        raise
 
     # ── Post-run report ──────────────────────────────────────────────────────
     size_kb     = os.path.getsize(audio_path) // 1024

@@ -1,44 +1,21 @@
+
 name: Daily YouTube Pipeline
 
 on:
   workflow_dispatch:
-    inputs:
-      video_type:
-        description: "Manual run mode. Use auto for the normal Asia/Kolkata weekday/weekend schedule."
-        required: false
-        default: "auto"
-        type: choice
-        options:
-          - auto
-          - shorts
-          - long
 
   schedule:
-    # Monday-Friday evenings: 3 Shorts.
-    # The third slot is 00:30 IST on the following calendar day,
-    # so the five weekday evening runs are represented by Tue-Sat 00:30.
-    - cron: "0 20 * * 1-5"
+    # Monday-Sunday: 3 Shorts every day (India time).
+    - cron: "0 1 * * *"
       timezone: "Asia/Kolkata"
-
-    - cron: "0 22 * * 1-5"
+    - cron: "0 3 * * *"
       timezone: "Asia/Kolkata"
-
-    - cron: "30 0 * * 2-6"
-      timezone: "Asia/Kolkata"
-
-    # Saturday: 1 Long Video at 17:00 IST.
-    - cron: "0 17 * * 6"
-      timezone: "Asia/Kolkata"
-
-    # Sunday: 1 Long Video at 17:00 IST.
-    - cron: "0 17 * * 0"
+    - cron: "0 6 * * *"
       timezone: "Asia/Kolkata"
 
 permissions:
   contents: write
 
-# Serialize production runs so scheduled/manual jobs cannot race on
-# YouTube quota, used_topics.txt, used_media.json, or git push.
 concurrency:
   group: daily-youtube-pipeline-${{ github.event.schedule || github.run_id }}
   cancel-in-progress: false
@@ -70,6 +47,38 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Prepare and verify local voiceover and background music
+        shell: bash
+        run: |
+          python -m video.offline_tts --download
+          python - <<'PY'
+          import tempfile
+          from pathlib import Path
+          import config
+          from video.narrator import generate_narration
+          from video.offline_tts import validate_audio
+          from video.music import mix_music_with_narration
+
+          with tempfile.TemporaryDirectory() as output:
+              audio = generate_narration({"sections": [{"narration":
+                  "Here is what happened, why it matters, and what comes next. "
+                  "Let us walk through the facts, one step at a time."
+              }]}, output)
+              validate_audio(audio)
+              assert " --> " in Path(output, "narration.srt").read_text()
+              mixed = mix_music_with_narration(
+                  audio, str(Path(output, "mixed.mp3")),
+                  config.MUSIC_VOLUME, config.MUSIC_LIBRARY_DIR,
+              )
+              validate_audio(mixed)
+              assert Path(mixed).read_bytes() != Path(audio).read_bytes(), "Music was not mixed"
+              print("Michael male voice, captions and background music verified.")
+          PY
+
+      # ======================================
+      # EXISTING VIDEO PIPELINE
+      # ======================================
+
       - name: Force compatible MoviePy
         run: |
           python -m pip uninstall -y moviepy || true
@@ -88,25 +97,6 @@ jobs:
         run: |
           python -m uploader.oauth_preflight
 
-      - name: Resolve scheduled video type
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          SCHEDULE_CRON: ${{ github.event.schedule }}
-          MANUAL_VIDEO_TYPE: ${{ inputs.video_type }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ -z "$MANUAL_VIDEO_TYPE" ] || [ "$MANUAL_VIDEO_TYPE" = "auto" ]; then
-              echo "PIPELINE_VIDEO_TYPE=" >> "$GITHUB_ENV"
-            else
-              echo "PIPELINE_VIDEO_TYPE=$MANUAL_VIDEO_TYPE" >> "$GITHUB_ENV"
-            fi
-          elif [ "$SCHEDULE_CRON" = "0 20 * * 1-5" ] || [ "$SCHEDULE_CRON" = "0 22 * * 1-5" ] || [ "$SCHEDULE_CRON" = "30 0 * * 2-6" ]; then
-            echo "PIPELINE_VIDEO_TYPE=shorts" >> "$GITHUB_ENV"
-          else
-            echo "PIPELINE_VIDEO_TYPE=long" >> "$GITHUB_ENV"
-          fi
-
       - name: Run AI video pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -114,6 +104,7 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           PIPELINE_TIMEZONE: Asia/Kolkata
+          PIPELINE_VIDEO_TYPE: shorts
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           YOUTUBE_COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES_B64 }}
           VIDEO_PRIVACY: public

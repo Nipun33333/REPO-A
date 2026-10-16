@@ -229,13 +229,13 @@ If you get stuck, [open an issue](https://github.com/yourusername/youtube-ai-age
 
 GitHub Actions uses the `Asia/Kolkata` timezone directly. The production schedule is:
 
-Topic discovery is fully category-agnostic: there is no fixed topic-category allowlist.
+Shorts only, **three times every day, Monday-Sunday**:
 
-- Monday-Friday: **8:00 PM IST → Shorts**
-- Monday-Friday: **10:00 PM IST → Shorts**
-- Tuesday-Saturday at **12:30 AM IST → Shorts** (the third Shorts slot for the previous weekday evening)
-- Saturday: **5:00 PM IST → Long Video**
-- Sunday: **5:00 PM IST → Long Video**
+- **1:00 AM IST → Shorts**
+- **3:00 AM IST → Shorts**
+- **6:00 AM IST → Shorts**
+
+Long-video runs are disabled in the scheduled workflow, manual workflow, CLI and generation UI.
 
 The scheduled time starts the pipeline. The actual YouTube upload can finish later because topic discovery, Gemini generation, TTS, media download, rendering, and OAuth upload take variable time.
 

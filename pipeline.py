@@ -4,9 +4,7 @@ YouTube AI Agent — Main Pipeline (Free Edition)
 Uses: Gemini · Edge TTS · Pexels · MoviePy · YouTube Data API
 
 Schedule:
-- Monday-Friday: Shorts
-- Saturday: 1 Long Video (5-6 min)
-- Sunday: 1 Long Video (5-6 min)
+- Monday-Sunday: Shorts at 1:00 AM, 3:00 AM and 6:00 AM IST
 
 Run: python -m pipeline
 """
@@ -38,6 +36,7 @@ from agents.topic_validation import (
 )
 from agents.us_trends import save_used_topic
 from video.narrator import generate_narration
+from video.music import mix_music_with_narration
 from video.stock import download_videos
 from video.creator import create_video
 from uploader.youtube import upload_to_youtube, _create_thumbnail
@@ -82,40 +81,6 @@ def _schedule_timezone():
         )
 
     return ZoneInfo(tz_name)
-
-
-def _legacy_get_video_type(now: datetime | None = None):
-    """
-    Asia/Kolkata Monday-Friday = Shorts.
-    Asia/Kolkata Saturday-Sunday = Long Video.
-
-    PIPELINE_VIDEO_TYPE may be set to "shorts" or "long" for an explicit
-    manual/local override. Scheduled production runs should leave it unset.
-    """
-    override = os.getenv("PIPELINE_VIDEO_TYPE", "").strip().lower()
-    if override:
-        if override not in {"shorts", "long"}:
-            raise ValueError(
-                "PIPELINE_VIDEO_TYPE must be unset, 'shorts', or 'long'."
-            )
-        return override
-
-    tz = _schedule_timezone()
-    if now is None:
-        current = datetime.now(tz)
-    elif now.tzinfo is None:
-        current = now.replace(tzinfo=tz)
-    else:
-        current = now.astimezone(tz)
-
-    weekday = current.weekday()
-
-    # Monday=0 ... Friday=4
-    if weekday <= 4:
-        return "shorts"
-
-    # Saturday=5, Sunday=6
-    return "long"
 
 
 def _clean_output_dir():
@@ -170,10 +135,7 @@ def run():
 
     video_type = get_video_type()
 
-    if video_type == "shorts":
-        print("\n🎬  YouTube AI Agent Studio  ·  SHORTS Pipeline\n")
-    else:
-        print("\n🎬  YouTube AI Agent Studio  ·  LONG VIDEO Pipeline\n")
+    print("\n🎬  YouTube AI Agent Studio  ·  SHORTS Pipeline\n")
 
     # ── Explicit schedule/timezone runtime logging ──────────────────
     # Always show BOTH clocks plus the resolved decision, so a scheduled
@@ -189,7 +151,7 @@ def run():
     print(f"  Video type selected: {video_type.upper()}")
 
     # ── 1. Research ───────────────────────────────────────────
-    banner("1 / 6  ·  Discovering current US trending topic  [Gemini]")
+    banner("1 / 6  ·  Discovering current movie / anime topic  [Gemini]")
     print(f"  → Gemini model in use: {get_active_model()}")
 
     with timed_stage("trend_discovery_research_finalization"):
@@ -206,7 +168,7 @@ def run():
     # ── 2. Script ─────────────────────────────────────────────
     banner(
         f"2 / 6  ·  Writing "
-        f"{'Shorts' if video_type == 'shorts' else 'Long Video'} script  [Gemini]"
+        "Shorts script  [Gemini]"
     )
 
     with timed_stage("script_generation"):
@@ -244,10 +206,7 @@ def run():
 
     print(f"\n  📝 Total words: {total_words}")
 
-    if video_type == "shorts":
-        print("  🎯 Target duration: 30-35 seconds")
-    else:
-        print("  🎯 Target duration: 5-6 minutes")
+    print("  🎯 Target duration: 30-35 seconds")
 
     with open(f"{config.OUTPUT_DIR}/script.json", "w") as f:
         json.dump(script, f, indent=2)
@@ -273,7 +232,7 @@ def run():
     # ── 4. Narration ──────────────────────────────────────────
     banner(
         "4 / 6  ·  Generating voiceover  "
-        "[Edge TTS — free]"
+        "[Kokoro Michael — free]"
     )
 
     with timed_stage("tts_captions"):
@@ -282,12 +241,21 @@ def run():
             config.OUTPUT_DIR
         )
 
+    if config.MUSIC_ENABLED:
+        with timed_stage("background_music"):
+            audio_path = mix_music_with_narration(
+                audio_path,
+                os.path.join(config.OUTPUT_DIR, "narration_mixed.mp3"),
+                music_volume=config.MUSIC_VOLUME,
+                library_dir=config.MUSIC_LIBRARY_DIR,
+            )
+
     print(f"\n  ✅  Audio: {audio_path}")
 
     # ── 5. Video ──────────────────────────────────────────────
     banner(
         f"5 / 6  ·  Building "
-        f"{'Short' if video_type == 'shorts' else 'Long'} video  "
+        "Short video  "
         "[FFmpeg]"
     )
 

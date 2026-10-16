@@ -22,11 +22,8 @@ def schedule_timezone():
 
 
 def get_video_type(now: datetime | None = None) -> str:
+    """Every scheduled/manual run is a Short, including weekends."""
     override = os.getenv("PIPELINE_VIDEO_TYPE", "").strip().lower()
-    if override:
-        if override not in {"shorts", "long"}:
-            raise ValueError("PIPELINE_VIDEO_TYPE must be unset, 'shorts', or 'long'.")
-        return override
-    tz = schedule_timezone()
-    current = datetime.now(tz) if now is None else (now.replace(tzinfo=tz) if now.tzinfo is None else now.astimezone(tz))
-    return "shorts" if current.weekday() <= 4 else "long"
+    if override not in {"", "shorts"}:
+        raise ValueError("Only Shorts are supported. PIPELINE_VIDEO_TYPE must be unset or 'shorts'.")
+    return "shorts"

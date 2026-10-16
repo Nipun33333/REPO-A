@@ -1,9 +1,11 @@
 """Fast Gemini client with lazy startup and runtime model failover."""
 from __future__ import annotations
 
+import re
 import threading
 from typing import Any
 
+import httpx
 from google import genai
 from google.genai import types
 
@@ -36,27 +38,40 @@ def _get_client() -> genai.Client:
 
 
 def _is_auth_error(err: Exception) -> bool:
+    status = SanitizedServiceError.from_exception(err).status_code
+    if status is not None:
+        return status in {401, 403}
     msg = str(err).upper()
-    return any(token in msg for token in ("401", "403", "PERMISSION_DENIED", "UNAUTHENTICATED", "API KEY"))
+    return bool(re.search(r"\b(?:401|403)\b", msg)) or any(
+        token in msg for token in ("PERMISSION_DENIED", "UNAUTHENTICATED", "API KEY")
+    )
 
 
 def _is_model_failover_error(err: Exception) -> bool:
     if _is_auth_error(err):
         return False
+    status = SanitizedServiceError.from_exception(err).status_code
+    if status is not None:
+        # Gemini can return HTTP 499 after a server deadline/cancellation.
+        # This is a provider response; user cancellation is never caught here.
+        return status in {404, 408, 429, 499} or 500 <= status <= 599
+    if isinstance(err, (TimeoutError, ConnectionError, httpx.TransportError)):
+        return True
     msg = str(err).upper()
+    if re.search(r"\b(?:404|408|429|499|5\d\d)\b", msg):
+        return True
     tokens = (
-        "408", "429", "500", "502", "503", "504",
         "RESOURCE_EXHAUSTED", "UNAVAILABLE", "INTERNAL",
         "DEADLINE_EXCEEDED", "MODEL_NOT_FOUND", "NOT_FOUND",
         "OVERLOADED", "RATE LIMIT", "RATE_LIMIT", "QUOTA",
-        "TIMED OUT", "TIMEOUT", "SERVICE UNAVAILABLE",
+        "TIMED OUT", "TIMEOUT", "SERVICE UNAVAILABLE", "CANCELLED",
     )
     return any(token in msg for token in tokens)
 
 
 def _retry_delay_seconds(attempt: int) -> float:
     # Fast exponential backoff for transient Gemini capacity/timeouts.
-    # attempt=1 -> 2s, attempt=2 -> 4s.
+    # attempt=1 -> 1s, attempt=2 -> 2s.
     return float(2 ** max(0, attempt - 1))
 
 
@@ -122,7 +137,10 @@ def _generate_once(model: str, contents: Any, timeout_seconds: float | None = No
             temperature=0.7,
             **optional_limits,
             http_options=types.HttpOptions(
-                timeout=int(float(timeout_seconds if timeout_seconds is not None else getattr(config, "GEMINI_REQUEST_TIMEOUT_SECONDS", 120)) * 1000)
+                timeout=int(float(timeout_seconds if timeout_seconds is not None else getattr(config, "GEMINI_REQUEST_TIMEOUT_SECONDS", 120)) * 1000),
+                # The router owns retries. SDK retries would multiply each
+                # attempt (and even optional calls) by up to five requests.
+                retry_options={"attempts": 1},
             ),
         ),
     )
@@ -141,7 +159,7 @@ def _generate_with_contents(
 ) -> str:
     """Generate with per-model retries, model fallback, and whole-task recovery.
 
-    503/504/429/5xx/timeouts are transient. Each model gets up to two
+    499/429/5xx/timeouts and transport failures are recoverable. Each model gets up to two
     application-level attempts before moving to the next model. If every
     configured model is exhausted, the whole task is retried up to
     GEMINI_TASK_MAX_RETRIES times with exponential backoff, resetting the

@@ -1,0 +1,49 @@
+
+name: Test Edge TTS Windows Cloud
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-edge:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Edge TTS
+        run: |
+          python -m pip install edge-tts==7.2.8
+
+      - name: Generate Real Voice
+        shell: pwsh
+        run: |
+          python -m edge_tts `
+            --text "Hello this is a test" `
+            --voice en-US-AndrewNeural `
+            --write-media test.mp3
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Edge TTS request failed"
+          }
+
+          if (-not (Test-Path test.mp3)) {
+            throw "Audio was not generated"
+          }
+
+          $size = (Get-Item test.mp3).Length
+
+          Write-Host "Audio size: $size bytes"
+
+          if ($size -lt 1000) {
+            throw "Audio is empty or invalid"
+          }
+
+          Write-Host "EDGE TTS CLOUD TEST PASSED"

@@ -1,9 +1,4 @@
-"""Dynamic current US YouTube trend discovery.
-
-Discovery uses broad YouTube popularity signals with no fixed topic keyword list
-or niche restriction. Gemini selects one current candidate that can support an
-explanation and that candidate becomes the canonical subject for all later stages.
-"""
+"""Current US movie and Japanese/US anime discovery, followed by a semantic gate."""
 from __future__ import annotations
 
 import json
@@ -27,7 +22,8 @@ BANNED_KEYWORDS = [
 
 
 def normalize(text: str) -> str:
-    text = re.sub(r"[^a-z0-9 ]+", " ", (text or "").lower())
+    # Keep Japanese titles usable for duplicate detection as well as English.
+    text = re.sub(r"[^\w ]+|_", " ", (text or "").lower())
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -119,9 +115,20 @@ def calculate_video_score(video: dict) -> float:
 
 
 def _source_specs() -> list[tuple[str, dict]]:
-    specs = [("US_mostPopular", {"chart": "mostPopular", "regionCode": config.DISCOVERY_REGION})]
-    for category_id in config.DISCOVERY_CATEGORY_IDS:
-        specs.append((f"US_category_{category_id}", {"chart": "mostPopular", "regionCode": config.DISCOVERY_REGION, "videoCategoryId": category_id}))
+    # Film & Animation charts plus recent searches; no fixed franchise list.
+    # Search results are hydrated through videos.list for real view statistics.
+    specs = [
+        (f"{region}_film_animation", {"chart": "mostPopular", "regionCode": region, "videoCategoryId": "1"})
+        for region in ("US", "JP")
+    ]
+    after = (datetime.now(timezone.utc) - timedelta(hours=SEARCH_HOURS)).isoformat().replace("+00:00", "Z")
+    for name, region, query in (
+        ("US_movies", "US", "Hollywood movie trailer|movie ending explained|movie hidden details"),
+        ("US_anime", "US", "anime explained|anime trailer|anime hidden details"),
+        ("JP_anime", "JP", "アニメ 考察|アニメ 伏線|アニメ 予告"),
+    ):
+        specs.append((name, {"q": query, "type": "video", "order": "viewCount",
+                             "regionCode": region, "publishedAfter": after}))
     return specs
 
 
@@ -130,12 +137,20 @@ def _fetch_source(source_name: str, base_params: dict) -> tuple[str, list[dict]]
     page_token = None
     for _ in range(max(1, config.DISCOVERY_MAX_PAGES)):
         params = dict(base_params)
-        params.update({"part": "snippet,statistics", "maxResults": config.DISCOVERY_RESULTS_PER_SOURCE})
+        params.update({"part": "snippet,statistics", "maxResults": min(50, max(1, config.DISCOVERY_RESULTS_PER_SOURCE))})
         if getattr(config, "YT_TREND_DIAGNOSTICS_ENABLED", False):
             params["part"] += ",contentDetails"
         if page_token:
             params["pageToken"] = page_token
-        data = youtube_request("videos", params)
+        if "q" in base_params:
+            search_params = {**params, "part": "snippet"}
+            search = youtube_request("search", search_params)
+            ids = [item.get("id", {}).get("videoId") for item in search.get("items", [])]
+            ids = [video_id for video_id in ids if video_id]
+            data = youtube_request("videos", {"part": params["part"], "id": ",".join(ids)}) if ids else {"items": []}
+            data["nextPageToken"] = search.get("nextPageToken")
+        else:
+            data = youtube_request("videos", params)
         for item in data.get("items", []) or []:
             video_id = str(item.get("id") or "").strip()
             snippet = item.get("snippet") or {}
@@ -199,7 +214,7 @@ def _dedupe_and_score(videos: list[dict]) -> list[dict]:
 
 def fetch_youtube_candidates() -> list[dict]:
     print("\n   🎬 DYNAMIC YOUTUBE DISCOVERY")
-    print("   → Broad current signals only; no fixed topic keyword list.")
+    print("   → US movies + Japanese/US anime: recent searches and Film & Animation charts.")
 
     videos: list[dict] = []
     specs = _source_specs()
@@ -243,8 +258,7 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
     if not candidates:
         raise RuntimeError("No usable current YouTube candidates found.")
 
-    # Preserve broad current-trend ranking. No fixed topic/category priority
-    # is applied; observed trend score and views are the only ordering signals.
+    # Rank current signals; the semantic selector enforces movie/anime eligibility.
     ordered = sorted(
         [item for item in candidates if topic_is_eligible(item)][: max(1, config.DISCOVERY_CANDIDATE_LIMIT)],
         key=lambda x: (float(x.get("trend_score", 0) or 0), int(x.get("views", 0) or 0)),
@@ -288,7 +302,7 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
     if selected is None:
         raise RuntimeError("No usable current US trend candidate after semantic scanning.")
 
-    print(f"   ✅ Selected current US trend: {safe_log_text(selected['title'])}")
+    print(f"   ✅ Selected movie/anime topic: {safe_log_text(selected['title'])}")
     print(f"   🎯 Domain: {safe_log_text(selected['content_domain'])} | Type: {safe_log_text(selected['content_type'])}")
     print(f"   🧠 Angle: {safe_log_text(selected['content_angle'] or '(Gemini did not provide one)')}")
 
