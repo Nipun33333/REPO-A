@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 import config
-from agents.niche import select_semantic_candidate
+from agents.niche import select_semantic_candidate, topic_is_eligible
 from agents.safe_logging import SanitizedServiceError, safe_error_summary, safe_log_text
 
 YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3"
@@ -149,18 +149,25 @@ def _fetch_source(source_name: str, base_params: dict) -> tuple[str, list[dict]]
                 continue
             if is_banned(title + " " + description):
                 continue
-            collected.append({
+            candidate = {
                 "video_id": video_id,
                 "title": title,
                 "description": description[:600],
+                "topic_validation_description": description,
                 "published_at": published_at,
                 "channel": str(snippet.get("channelTitle") or "").strip(),
+                "tags": snippet.get("tags") or [],
+                "default_language": snippet.get("defaultLanguage") or "",
+                "default_audio_language": snippet.get("defaultAudioLanguage") or "",
                 "category_id": str(snippet.get("categoryId") or base_params.get("videoCategoryId") or ""),
                 "views": int(stats.get("viewCount", 0) or 0),
                 "likes": int(stats.get("likeCount", 0) or 0),
                 "comments": int(stats.get("commentCount", 0) or 0),
                 "source": source_name,
-            })
+            }
+            if not topic_is_eligible(candidate):
+                continue
+            collected.append(candidate)
             if getattr(config, "YT_TREND_DIAGNOSTICS_ENABLED", False):
                 row = collected[-1]
                 row["channel_id"] = snippet.get("channelId", "")
@@ -222,7 +229,7 @@ def filter_candidates(candidates: list[dict]) -> list[dict]:
     filtered = []
     for candidate in candidates:
         title = candidate.get("title", "").strip()
-        if not title or is_banned(title):
+        if not title or is_banned(title) or not topic_is_eligible(candidate):
             continue
         if any(topics_are_similar(title, old) for old in used):
             continue
@@ -239,7 +246,7 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
     # Preserve broad current-trend ranking. No fixed topic/category priority
     # is applied; observed trend score and views are the only ordering signals.
     ordered = sorted(
-        candidates[: max(1, config.DISCOVERY_CANDIDATE_LIMIT)],
+        [item for item in candidates if topic_is_eligible(item)][: max(1, config.DISCOVERY_CANDIDATE_LIMIT)],
         key=lambda x: (float(x.get("trend_score", 0) or 0), int(x.get("views", 0) or 0)),
         reverse=True,
     )
@@ -255,8 +262,19 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
         checked += len(batch)
         print(f"   → Semantic trend gate batch {batch_index + 1}: evaluating {len(batch)} candidates...")
         try:
-            selected = select_semantic_candidate(batch, channel_description)
-            break
+            # Each rejected result removes a candidate, so retries are bounded
+            # by the existing batch size and maximum number of batches.
+            while batch:
+                proposal = select_semantic_candidate(batch, channel_description)
+                original = next((item for item in batch if item.get("video_id") == proposal.get("video_id")), None)
+                if original is None:
+                    raise ValueError("Trend selector returned an unknown candidate_id.")
+                if topic_is_eligible(original) and topic_is_eligible(proposal):
+                    selected = proposal
+                    break
+                batch = [item for item in batch if item.get("video_id") != proposal.get("video_id")]
+            if selected is not None:
+                break
         except RuntimeError as exc:
             # A null result means no candidate in this window was suitable for
             # an explanation. Continue scanning later current candidates.
