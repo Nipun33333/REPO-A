@@ -179,6 +179,9 @@ def build_selection_prompt(candidates: list[dict], channel_description: str = ""
             "likes": item.get("likes", 0),
             "comments": item.get("comments", 0),
             "trend_score": item.get("trend_score", 0),
+            "viral_score": item.get("viral_score", 0),
+            "views_per_hour": item.get("views_per_hour", 0),
+            "engagement_rate_pct": item.get("engagement_rate_pct", 0),
             "published_at": item.get("published_at", ""),
         }, ensure_ascii=False))
 
@@ -190,7 +193,11 @@ CHANNEL POSITIONING:
 GOAL:
 Select ONE current, high-signal candidate within the mandatory niche below.
 The selected candidate becomes the immutable subject for the entire pipeline.
-Select engaging trending topics for a United States audience. Exclude India-centric
+DISCOVERY STRATEGY: {getattr(config, "DISCOVERY_MODE", "viral").upper()}
+Prefer early breakout potential backed by measured views/hour, likes/comments per view
+and recency. Big lifetime view totals or a famous channel alone are not reasons to
+select a subject. Viral scoring is only a heuristic, never a guarantee.
+Select engaging topics for a United States audience. Exclude India-centric
 news, Indian cinema, Indian celebrities, regional Indian entertainment, Indian
 sports, and other India-specific trends. Preserve relevant US and international
 content within the mandatory niche, including Japanese anime.
@@ -210,8 +217,8 @@ No fixed franchise list: discover current works within these domains.
 
 SELECTION RULES:
 - Choose only a candidate_id present in the supplied list.
-- Prefer strong current trend signals: recency, view velocity, engagement, and
-  broad US interest.
+- Prefer observable early breakout signals: recency, views/hour, engagement,
+  and broad US interest. Avoid low-evidence hype or misleading clickbait.
 - Prefer candidates that can be explained, contextualized, analyzed, or broken
   down in a short video.
 - A raw clip/performance is acceptable when the surrounding subject itself is
