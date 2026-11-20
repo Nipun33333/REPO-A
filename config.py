@@ -11,6 +11,11 @@ for _stream in (sys.stdout, sys.stderr):
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
+# Discovery strategy: prioritize promising early-breakout topics, not just mostPopular.
+DISCOVERY_MODE = os.getenv("DISCOVERY_MODE", "viral").strip().lower()
+if DISCOVERY_MODE not in {"viral", "trending"}:
+    DISCOVERY_MODE = "viral"
+
 # Optional content improvements. Production behavior stays unchanged by default.
 YT_OPTIMIZATION_ENABLED = os.getenv("YT_OPTIMIZATION_ENABLED", "0").lower() in {"1", "true", "yes"}
 # Parsed/clamped by the optional module so a bad setting cannot stop production.
