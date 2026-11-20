@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import requests
@@ -114,6 +115,29 @@ def calculate_video_score(video: dict) -> float:
     return round(min(100.0, velocity_score + engagement_score + recency_score), 2)
 
 
+def calculate_viral_score(video: dict) -> float:
+    """Breakout-potential heuristic, NOT a prediction of future views.
+
+    Favors observed views/hour, meaningful likes/comments per view and freshness
+    rather than choosing the source with the largest lifetime view count.
+    """
+    views = max(0, int(video.get("views", 0) or 0))
+    if views == 0:
+        return 0.0
+    likes = max(0, int(video.get("likes", 0) or 0))
+    comments = max(0, int(video.get("comments", 0) or 0))
+    age = max(_age_hours(video.get("published_at", "")), 0.5)
+    views_per_hour = views / age
+    velocity_signal = min(55.0, 11.0 * math.log10(1.0 + views_per_hour))
+    engagement_signal = min(
+        30.0,
+        200.0 * min(likes / views, 0.10)
+        + 500.0 * min(comments / views, 0.02),
+    )
+    freshness_signal = 15.0 * max(0.0, 1.0 - age / max(1, SEARCH_HOURS))
+    return round(min(100.0, velocity_signal + engagement_signal + freshness_signal), 2)
+
+
 def _source_specs() -> list[tuple[str, dict]]:
     # Film & Animation charts plus recent searches; no fixed franchise list.
     # Search results are hydrated through videos.list for real view statistics.
@@ -129,6 +153,14 @@ def _source_specs() -> list[tuple[str, dict]]:
     ):
         specs.append((name, {"q": query, "type": "video", "order": "viewCount",
                              "regionCode": region, "publishedAfter": after}))
+    if getattr(config, "DISCOVERY_MODE", "viral") == "viral":
+        # Fresh discovery helps find promising subjects before they top the charts.
+        for name, region, query in (
+            ("US_fresh_movies_anime", "US", "new movie trailer|anime episode breakdown"),
+            ("JP_fresh_anime", "JP", "アニメ 予告|アニメ 最新話"),
+        ):
+            specs.append((name, {"q": query, "type": "video", "order": "date",
+                                 "regionCode": region, "publishedAfter": after}))
     return specs
 
 
@@ -202,13 +234,23 @@ def _fetch_source(source_name: str, base_params: dict) -> tuple[str, list[dict]]
 
 def _dedupe_and_score(videos: list[dict]) -> list[dict]:
     unique: dict[str, dict] = {}
-    for video in videos:
+    ranking = "viral_score" if getattr(config, "DISCOVERY_MODE", "viral") == "viral" else "trend_score"
+    for item in videos:
+        video = dict(item)
+        views = max(0, int(video.get("views", 0) or 0))
+        age = max(_age_hours(video.get("published_at", "")), 0.5)
+        video["views_per_hour"] = round(views / age, 2)
+        video["engagement_rate_pct"] = round(
+            100.0 * (max(0, int(video.get("likes", 0) or 0))
+                     + max(0, int(video.get("comments", 0) or 0))) / max(views, 1), 2
+        )
+        video["trend_score"] = calculate_video_score(video)
+        video["viral_score"] = calculate_viral_score(video)
         vid = video["video_id"]
-        if vid not in unique or video.get("trend_score", 0) > unique[vid].get("trend_score", 0):
-            video["trend_score"] = calculate_video_score(video)
+        if vid not in unique or video[ranking] > unique[vid][ranking]:
             unique[vid] = video
     result = list(unique.values())
-    result.sort(key=lambda x: (x.get("trend_score", 0), x.get("views", 0)), reverse=True)
+    result.sort(key=lambda x: (x.get(ranking, 0), x.get("views_per_hour", 0)), reverse=True)
     return result
 
 
@@ -258,12 +300,15 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
     if not candidates:
         raise RuntimeError("No usable current YouTube candidates found.")
 
-    # Rank current signals; the semantic selector enforces movie/anime eligibility.
+    # Rank the entire eligible pool before applying the limit; Gemini retains
+    # the final movie/anime and factual suitability checks.
+    ranking = "viral_score" if getattr(config, "DISCOVERY_MODE", "viral") == "viral" else "trend_score"
     ordered = sorted(
-        [item for item in candidates if topic_is_eligible(item)][: max(1, config.DISCOVERY_CANDIDATE_LIMIT)],
-        key=lambda x: (float(x.get("trend_score", 0) or 0), int(x.get("views", 0) or 0)),
+        [item for item in candidates if topic_is_eligible(item)],
+        key=lambda x: (float(x.get(ranking, x.get("trend_score", 0)) or 0),
+                       float(x.get("views_per_hour", 0) or 0)),
         reverse=True,
-    )
+    )[: max(1, config.DISCOVERY_CANDIDATE_LIMIT)]
     batch_size = max(1, int(getattr(config, "DISCOVERY_SEMANTIC_BATCH_SIZE", 30)))
     max_batches = max(1, int(getattr(config, "DISCOVERY_SEMANTIC_MAX_BATCHES", 4)))
     checked = 0
@@ -318,6 +363,10 @@ def choose_best_trend(candidates: list[dict], channel_description: str = "") -> 
         "content_domain": selected["content_domain"],
         "content_angle": selected.get("content_angle", ""),
         "trend_score": selected.get("trend_score", 0),
+        "viral_score": selected.get("viral_score", 0),
+        "discovery_mode": getattr(config, "DISCOVERY_MODE", "viral"),
+        "views_per_hour": selected.get("views_per_hour", 0),
+        "engagement_rate_pct": selected.get("engagement_rate_pct", 0),
         "channel": selected.get("channel", ""),
         "published_at": selected.get("published_at", ""),
         "views": selected.get("views", 0),
