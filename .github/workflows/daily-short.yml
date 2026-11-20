@@ -108,6 +108,8 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           YOUTUBE_COOKIES_B64: ${{ secrets.YOUTUBE_COOKIES_B64 }}
           VIDEO_PRIVACY: public
+          DISCOVERY_MODE: viral
+          YT_OPTIMIZATION_ENABLED: "1"
         run: |
           python -m pipeline
 
