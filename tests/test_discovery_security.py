@@ -147,7 +147,7 @@ def test_successful_research_redacts_logs_without_changing_content(monkeypatch, 
 def test_selector_failure_is_sanitized(monkeypatch, error_type):
     monkeypatch.setattr(us_trends, "select_semantic_candidate", Mock(side_effect=error_type(unsafe_message())))
     with pytest.raises(SanitizedServiceError) as caught:
-        us_trends.choose_best_trend([{"video_id": "candidate"}])
+        us_trends.choose_best_trend([{"video_id": "candidate", "title": "Hollywood movie trailer", "description": "Hollywood film context"}])
     assert_safe("".join(traceback.format_exception(caught.value)))
 
 
