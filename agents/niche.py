@@ -197,6 +197,11 @@ DISCOVERY STRATEGY: {getattr(config, "DISCOVERY_MODE", "viral").upper()}
 Prefer early breakout potential backed by measured views/hour, likes/comments per view
 and recency. Big lifetime view totals or a famous channel alone are not reasons to
 select a subject. Viral scoring is only a heuristic, never a guarantee.
+US audience fit is a priority: favor named works with current, observable
+US-region discovery signals and meaningful English-speaking viewer interest.
+Japanese anime is welcome when it is trending among US viewers, not solely
+because a clip is popular in Japan. Do not infer US audience demand from a
+source channel's language or country alone. Reject vague subject-free titles.
 Select engaging topics for a United States audience. Exclude India-centric
 news, Indian cinema, Indian celebrities, regional Indian entertainment, Indian
 sports, and other India-specific trends. Preserve relevant US and international
@@ -220,7 +225,8 @@ SELECTION RULES:
 - Prefer observable early breakout signals: recency, views/hour, engagement,
   and broad US interest. Avoid low-evidence hype or misleading clickbait.
 - Prefer candidates that can be explained, contextualized, analyzed, or broken
-  down in a short video.
+  down in a short video. The named subject and concrete angle must be evident
+  from the supplied source rather than invented to rescue vague clickbait.
 - A raw clip/performance is acceptable when the surrounding subject itself is
   explainable; do not invent a different topic.
 - Category metadata and search phrases are hints, not proof of niche eligibility.

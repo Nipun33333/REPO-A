@@ -125,7 +125,7 @@ def test_selector_unknown_candidate_rejected(monkeypatch):
 
 def test_manual_movie_topic_is_niche_gated(monkeypatch):
     _mock_generate(monkeypatch, {"candidate_id": "manual", "content_domain": "US_MOVIE"})
-    out = niche.validate_manual_topic("Inception ending explained")
+    out = niche.validate_manual_topic("Hollywood movie Inception ending explained")
     assert out["content_domain"] == "US_MOVIE"
     assert out["content_type"] == "EXPLAINER"
 
@@ -191,7 +191,7 @@ def test_fetch_source_parallel_result_shape(monkeypatch):
     def fake_request(endpoint, params, timeout=8.0):
         return {"items": [{
             "id": "video-1",
-            "snippet": {"title": "Current AI chip trend", "description": "desc", "publishedAt": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"), "channelTitle": "channel", "categoryId": "28"},
+            "snippet": {"title": "Hollywood movie trailer", "description": "A current US film trailer", "publishedAt": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat().replace("+00:00", "Z"), "channelTitle": "channel", "categoryId": "1"},
             "statistics": {"viewCount": "1000", "likeCount": "50", "commentCount": "5"},
         }], "nextPageToken": None}
     monkeypatch.setattr(us_trends, "youtube_request", fake_request)
@@ -206,9 +206,9 @@ def test_category_ids_default_is_broad():
 
 def test_end_to_end_movie_selection(monkeypatch):
     candidates = [
-        _candidate("Inception ending explained", "tech", 98, "28"),
+        _candidate("Hollywood movie Inception ending explained", "tech", 98, "28"),
         _candidate("NBA Finals controversy", "sports", 96, "17"),
-        _candidate("Movie trailer explained", "movie", 94, "1"),
+        _candidate("Hollywood movie trailer explained", "movie", 94, "1"),
     ]
     monkeypatch.setattr(us_trends, "fetch_youtube_candidates", lambda: candidates)
     monkeypatch.setattr(us_trends, "load_used_topics", lambda: [])
@@ -340,7 +340,7 @@ def test_100x_subject_integrity_rejects_changed_source(iteration):
 @pytest.mark.parametrize("iteration", range(100))
 def test_100x_movie_discovery_selection(iteration, monkeypatch):
     candidate_id = f"iter-{iteration}"
-    subject = f"Inception movie ending detail {iteration}"
+    subject = f"Hollywood movie Inception ending detail {iteration}"
     candidate = _candidate(subject, candidate_id, 90, "28")
     monkeypatch.setattr(niche, "generate", lambda *a, cid=candidate_id, **k: json.dumps({
         "candidate_id": cid, "content_type": "EXPLAINER", "content_domain": "US_MOVIE",
@@ -391,7 +391,7 @@ def test_workflow_schedule_is_india_time():
 def test_discovery_sources_are_movie_anime_focused():
     specs = us_trends._source_specs()
     charts = [params for _, params in specs if "chart" in params]
-    assert {params["regionCode"] for params in charts} == {"US", "JP"}
+    assert {params["regionCode"] for params in charts} == {"US"}
     assert all(params["videoCategoryId"] == "1" for params in charts)
     searches = [params for _, params in specs if "q" in params]
     assert len(searches) == 3
@@ -405,9 +405,9 @@ def test_readme_describes_movie_anime_niche():
 
 
 @pytest.mark.parametrize("domain,subject", [
-    ("US_MOVIE", "Inception ending explained"),
-    ("JAPANESE_ANIME", "One Piece episode hidden details"),
-    ("US_ANIME", "Castlevania character explained"),
+    ("US_MOVIE", "Hollywood movie Inception ending explained"),
+    ("JAPANESE_ANIME", "Japanese anime One Piece episode hidden details"),
+    ("US_ANIME", "US anime Castlevania character explained"),
 ])
 def test_allowed_domains_survive_selection_and_validation(monkeypatch, domain, subject):
     _mock_generate(monkeypatch, {"candidate_id": "x1", "content_domain": domain})
@@ -424,7 +424,7 @@ def test_allowed_domains_survive_selection_and_validation(monkeypatch, domain, s
 @pytest.mark.parametrize("domain", ["GENERAL_TREND", "SPORTS", "TECHNOLOGY", "", None])
 def test_manual_topic_cannot_bypass_niche(monkeypatch, domain):
     _mock_generate(monkeypatch, {"candidate_id": "manual", "content_domain": domain})
-    with pytest.raises(RuntimeError, match="movie/anime niche"):
+    with pytest.raises(ValueError, match="lacks reliable eligibility evidence"):
         niche.validate_manual_topic("A technology launch")
 
 
@@ -438,7 +438,7 @@ def test_search_hydrates_statistics_and_paginates(monkeypatch):
             return {"items": [{"id": {"videoId": "v2" if page else "v1"}}],
                     "nextPageToken": None if page else "page2"}
         return {"items": [{"id": params["id"], "snippet": {
-            "title": "Inception ending", "publishedAt": published, "categoryId": "1"},
+            "title": "Hollywood movie Inception ending", "publishedAt": published, "categoryId": "1"},
             "statistics": {"viewCount": "12345", "likeCount": "300"}}]}
     monkeypatch.setattr(us_trends, "youtube_request", request)
     monkeypatch.setattr(config, "DISCOVERY_MAX_PAGES", 2)
