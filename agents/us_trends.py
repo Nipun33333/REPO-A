@@ -22,6 +22,35 @@ BANNED_KEYWORDS = [
 ]
 
 
+# Reject source videos whose titles contain no identifiable subject. A video
+# called "This Sucks" or "We Won" provides no safe, grounded topic anchor.
+# This is about source specificity, not a franchise/category allowlist.
+_LOW_INFORMATION_TITLE_WORDS = {
+    "a", "an", "the", "this", "that", "these", "those", "it", "its",
+    "i", "me", "my", "our", "we", "us", "you", "your", "they", "them",
+    "is", "are", "was", "were", "have", "has", "had", "do", "did",
+    "and", "or", "for", "from", "of", "to", "in", "on", "at", "with",
+    "now", "today", "just", "here", "there", "again", "finally",
+    "why", "what", "how", "who", "wow", "lol", "all", "everyone",
+    "internet", "people", "thing", "things", "something", "everything",
+    "happened", "happens", "happening", "exploded", "explodes",
+    "sucks", "won", "win", "winning", "crazy", "insane",
+    "huge", "big", "unbelievable", "shocking", "official",
+    "latest", "new", "video", "update", "news", "reaction",
+}
+
+def has_specific_subject(candidate: dict) -> bool:
+    title = str(candidate.get("title") or "").strip()
+    if not title:
+        return False
+    words = re.findall(r"[a-z0-9]+", title.casefold())
+    # Unicode-only titles (for example, named Japanese works) go to the
+    # existing semantic gate rather than being discarded as empty.
+    return bool(re.search(r"\w", title)) and (
+        not words or any(word not in _LOW_INFORMATION_TITLE_WORDS for word in words)
+    )
+
+
 def normalize(text: str) -> str:
     # Keep Japanese titles usable for duplicate detection as well as English.
     text = re.sub(r"[^\w ]+|_", " ", (text or "").lower())
@@ -139,17 +168,17 @@ def calculate_viral_score(video: dict) -> float:
 
 
 def _source_specs() -> list[tuple[str, dict]]:
-    # Film & Animation charts plus recent searches; no fixed franchise list.
+    # US Film & Animation charts plus US-region searches; no JP-only feeds.
+    # Japanese anime stays eligible when it has US-market discovery signals.
     # Search results are hydrated through videos.list for real view statistics.
     specs = [
         (f"{region}_film_animation", {"chart": "mostPopular", "regionCode": region, "videoCategoryId": "1"})
-        for region in ("US", "JP")
+        for region in ("US",)
     ]
     after = (datetime.now(timezone.utc) - timedelta(hours=SEARCH_HOURS)).isoformat().replace("+00:00", "Z")
     for name, region, query in (
         ("US_movies", "US", "Hollywood movie trailer|movie ending explained|movie hidden details"),
         ("US_anime", "US", "anime explained|anime trailer|anime hidden details"),
-        ("JP_anime", "JP", "アニメ 考察|アニメ 伏線|アニメ 予告"),
     ):
         specs.append((name, {"q": query, "type": "video", "order": "viewCount",
                              "regionCode": region, "publishedAfter": after}))
@@ -157,7 +186,6 @@ def _source_specs() -> list[tuple[str, dict]]:
         # Fresh discovery helps find promising subjects before they top the charts.
         for name, region, query in (
             ("US_fresh_movies_anime", "US", "new movie trailer|anime episode breakdown"),
-            ("JP_fresh_anime", "JP", "アニメ 予告|アニメ 最新話"),
         ):
             specs.append((name, {"q": query, "type": "video", "order": "date",
                                  "regionCode": region, "publishedAfter": after}))
@@ -286,7 +314,7 @@ def filter_candidates(candidates: list[dict]) -> list[dict]:
     filtered = []
     for candidate in candidates:
         title = candidate.get("title", "").strip()
-        if not title or is_banned(title) or not topic_is_eligible(candidate):
+        if not has_specific_subject(candidate) or is_banned(title) or not topic_is_eligible(candidate):
             continue
         if any(topics_are_similar(title, old) for old in used):
             continue
