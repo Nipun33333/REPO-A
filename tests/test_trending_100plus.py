@@ -391,7 +391,7 @@ def test_workflow_schedule_is_india_time():
 def test_discovery_sources_are_movie_anime_focused():
     specs = us_trends._source_specs()
     charts = [params for _, params in specs if "chart" in params]
-    assert {params["regionCode"] for params in charts} == {"US", "JP"}
+    assert {params["regionCode"] for params in charts} == {"US"}
     assert all(params["videoCategoryId"] == "1" for params in charts)
     searches = [params for _, params in specs if "q" in params]
     assert len(searches) == 3
