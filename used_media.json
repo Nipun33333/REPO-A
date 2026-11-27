@@ -940,7 +940,12 @@
     "https://www.tiktok.com/@ares_s35/video/7556267800638098700",
     "pexels:7045273",
     "https://www.tiktok.com/@urarakaslover/video/7633487192404282644",
-    "https://www.facebook.com/comicconnewsuk/videos/ochaco-uraraka-cosplay-from-my-hero-academia-boku-no-hero-academia-anime-and-man/1636255790942770"
+    "https://www.facebook.com/comicconnewsuk/videos/ochaco-uraraka-cosplay-from-my-hero-academia-boku-no-hero-academia-anime-and-man/1636255790942770",
+    "https://www.facebook.com/100064406243428/videos/first-look-at-doctor-doom-vs-magneto-in-avengersdoomsday/28964145576617697",
+    "https://www.facebook.com/cultureofandom/videos/new-teaser-for-avengers-doomsday-he-is-pain-he-is-extinction-magneto/1012744544589530",
+    "https://www.instagram.com/reel/DgMEoPquoDp",
+    "https://www.facebook.com/3CFilm/videos/magneto-vs-doctor-doom-tv-spot-explained/1909447000471989",
+    "pexels:9695192"
   ],
   "images": [
     "https://gamesbeat.com/wp-content/uploads/2026/08/Hitman-768x432.jpg",
@@ -1079,7 +1084,9 @@
     "https://www.sideshow.com/cdn-cgi/image/quality=90,f=auto/https://www.sideshow.com/storage/product-images/910608/yuta-okkotsu-0-version_jujutsu-kaisen_gallery_6226a6aa71a60.jpg",
     "https://static0.srcdn.com/wordpress/wp-content/uploads/2022/03/Split-image-of-Batman-and-Catwoman-in-The-Batman.jpg",
     "https://www.rollingstone.co.uk/wp-content/uploads/sites/2/2021/12/robert-pattinson-the-batman.jpg",
-    "https://www.siliconera.com/wp-content/uploads/2023/03/my-hero-academia-season-7-adds-star-and-stripe.jpeg"
+    "https://www.siliconera.com/wp-content/uploads/2023/03/my-hero-academia-season-7-adds-star-and-stripe.jpeg",
+    "https://static0.moviewebimages.com/wordpress/wp-content/uploads/2026/11/doctor-doom-in-avengers-doomsday.jpg",
+    "https://static0.cbrimages.com/wordpress/wp-content/uploads/2020/03/doctor-doom-magneto.jpg"
   ],
   "video_hashes": [],
   "image_hashes": [],
@@ -1865,7 +1872,12 @@
     "da9999b8acb19579,d6de694deda91d1d,9bb1d2d469659595,39686161686d250c",
     "3c1c1e3c743474d8,3c1c1e3c34e4b4d8,3c1c0e5c6474d0e8,1e0e0e1a3272daec",
     "6f9f1f3f1d1b4d66,2763515169636747,07696cd54f651b0e,636961625373858d",
-    "f0d4d4f2a48cc988,f0ea73e6ef9696bf,f0c2cbad4ec68693,ecc63391d8d8c1c8"
+    "f0d4d4f2a48cc988,f0ea73e6ef9696bf,f0c2cbad4ec68693,ecc63391d8d8c1c8",
+    "c792c2d292870789,e8ece4c0b4b2b62f,7b491b173555555d,c1c1612181a2b09a",
+    "43c3c3c6c4c4c8d2,eae8cccccccccccc,c161612181a2b09a,4044c4c4c4444101",
+    "018292c6c0030edc,8f17b2c8cc357969,010042c1b282f86e,1000024440406060",
+    "913632dc13123131,b13632b7af66c4e1,b13672f1be64e7e7,913212cdcc830403",
+    "9089e06488800000,70242260d8818100,0012c00000004000,0024000300000808"
   ],
   "image_perceptual_hashes": [
     "99b36b293cc1a73a",
@@ -1930,9 +1942,11 @@
     "61b24240893960c5",
     "1b185c7873d0e4e2",
     "37727999b9737464",
-    "9fb3793978f89f55"
+    "9fb3793978f89f55",
+    "c1893777aeb7e9f0",
+    "cefc6c701817132b"
   ],
-  "videos_hashes": [
-    "c71d8d0a00247b1b3beb3395cc1d60ed47390f7b5ae8b4333075002055fed553"
+  "images_hashes": [
+    "e8b5979b8df732bcbf73b9eccb836ea28e9f4877fea7e7aefb382fab66817bf8"
   ]
 }
